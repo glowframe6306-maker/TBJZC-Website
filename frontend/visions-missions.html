@@ -27,7 +27,22 @@ a{color:inherit;text-decoration:none;}
 .overlay-img{max-width:100%;max-height:100%;border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,0.6);}
 .overlay-close{position:absolute;top:16px;left:16px;padding:12px 18px;border:none;border-radius:999px;background:rgba(255,255,255,0.12);color:#fff;font-size:0.95rem;font-weight:900;letter-spacing:0.14em;cursor:pointer;z-index:1;}
 .overlay-close:hover{background:rgba(255,255,255,0.22);}
-.page-footer{margin-top:40px;padding-top:24px;text-align:center;color:var(--muted);font-size:0.9rem;letter-spacing:0.08em;border-top:1px solid rgba(255,215,0,0.08);}
+  .contact-square{width:min(420px,100%);margin:32px auto 0;padding:24px;border-radius:24px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);box-shadow:0 20px 45px rgba(0,0,0,0.18);}
+  .contact-square h4{margin:0 0 1rem;color:var(--gold);font-size:0.95rem;letter-spacing:0.2em;text-transform:uppercase;}
+  .contact-row{display:grid;gap:16px;}
+  .contact-row strong{display:block;color:var(--muted);font-size:0.78rem;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:0.35rem;}
+  .contact-row span,.contact-row a{display:block;color:#fff;font-size:0.98rem;word-break:break-word;text-decoration:none;}
+  .contact-row a:hover{text-decoration:underline;}
+  .back-button{width:100%;margin-top:1.4rem;padding:16px 18px;border:none;border-radius:999px;background:var(--gold);color:#050505;font-weight:900;letter-spacing:0.14em;cursor:pointer;transition:transform 0.2s ease,filter 0.2s ease;}
+  .back-button:hover{transform:translateY(-2px);filter:brightness(1.05);}
+  .button-group{display:grid;gap:14px;margin-top:1.4rem}
+  .secondary-button{background:rgba(255,255,255,0.08);color:#ffd700;}
+  .secondary-button:hover{filter:brightness(1.05);}
+  .page-footer{margin-top:40px;padding-top:24px;text-align:center;color:var(--muted);font-size:0.9rem;letter-spacing:0.08em;border-top:1px solid rgba(255,215,0,0.08);}
+  .page-footer-line{display:block;text-align:center;width:100%;}
+  .page-footer-line:nth-child(1){font-size:0.35rem;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.2rem;}
+  .page-footer-line:nth-child(2){font-size:0.45rem;font-weight:900;color:var(--gold);letter-spacing:0.12em;margin-bottom:0.2rem;}
+  .page-footer-line:nth-child(3){font-size:0.35rem;letter-spacing:0.08em;color:var(--muted);}
 @media(min-width:780px){.gallery{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:780px){.page{padding:20px;} .page-title{font-size:1.9rem;} .overlay-close{top:12px;left:12px;}}
 </style>
@@ -53,7 +68,33 @@ a{color:inherit;text-decoration:none;}
       </article>
     </div>
 
-    <div class="page-footer">CREATED AND DESIGNED BY M.I. MUHAMMADH — 2025 O/L BATCH</div>
+    <div class="contact-square">
+      <h4>VISION & MISSION CONTACT</h4>
+      <div class="contact-row">
+        <div>
+          <strong>EMAIL</strong>
+          <a href="mailto:tbjzc2013@gmail.com?subject=Contact%20from%20website&body=Hello%20T.B.%20Jaya%20Zahira%20Vidyalaya%2C%0A%0A">tbjzc2013@gmail.com</a>
+        </div>
+        <div>
+          <strong>PHONE</strong>
+          <a href="tel:+94112300338">+94 112 300 338</a>
+        </div>
+        <div>
+          <strong>FACEBOOK PAGE</strong>
+          <a href="https://web.facebook.com/T.BJZahiraofficial/?_rdc=1&_rdr#" target="_blank" rel="noopener noreferrer">facebook.com/T.BJZahiraofficial</a>
+        </div>
+      </div>
+      <div class="button-group">
+        <button class="back-button" id="pageBackButton">BACK</button>
+        <a class="back-button secondary-button" href="about.html">LEARN MORE</a>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span class="page-footer-line">CREATED AND DESIGNED BY</span>
+      <span class="page-footer-line">M.I. MUHAMMADH</span>
+      <span class="page-footer-line">2025 O/L BATCH</span>
+    </div>
   </div>
 
   <div class="overlay" id="imageOverlay" aria-hidden="true">
