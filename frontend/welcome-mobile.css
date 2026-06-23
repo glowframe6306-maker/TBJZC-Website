@@ -1,0 +1,63 @@
+/* Mobile-only overrides for Welcome page (max-width:560px) */
+:root{--mobile-padding:18px}
+html.mobile-layout body{overflow-x:hidden}
+
+/* Hide heavy intro animations for mobile to save CPU and present a clean welcome */
+.intro-section{display:none !important}
+
+/* Mobile welcome card: elegant, centered, premium feel */
+.hero{background-attachment:scroll !important;background-position:center top !important;padding:28px 0}
+.mobile-welcome-card{max-width:520px;margin:18px auto;padding:18px;border-radius:16px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 8px 28px rgba(0,0,0,0.45);display:flex;flex-direction:column;align-items:center;gap:12px}
+
+/* Logo: small, sharp, centered with breathing space */
+.mobile-logo{width:68px;height:68px;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,215,0,0.14);background:rgba(255,255,255,0.02)}
+.mobile-logo img{width:100%;height:auto;object-fit:contain;display:block}
+
+/* Heading and description - balanced sizes for phones */
+.mobile-heading{font-size:clamp(1.15rem,5.6vw,1.45rem);line-height:1.18;color:var(--gold);text-align:center;margin-top:4px;font-weight:700}
+.mobile-sub{font-size:clamp(0.95rem,4.4vw,1.05rem);line-height:1.5;color:var(--muted);text-align:center;margin:0;padding:0 8px}
+
+/* Spacing and layout */
+.mobile-actions{display:flex;gap:10px;width:100%;justify-content:center;padding-top:6px}
+.mobile-cta{background:var(--gold);color:#050505;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:700}
+
+/* Cards and content stack into a single column */
+.other-options-grid{grid-template-columns:1fr;gap:12px}
+.option-card{padding:12px 14px;border-radius:12px}
+.option-card img{width:52px;height:52px}
+
+/* Contact box full width */
+.contact-square{width:100%;padding:14px}
+
+/* Increase tap targets */
+.back-button, .search-panel button, .cta{min-height:46px;padding:10px 16px}
+
+/* Prevent horizontal scroll */
+body,html{overflow-x:hidden}
+
+/* Gentle left-to-right logo animation (transform only). Very small amplitude for low CPU use. */
+@keyframes mobileLogoSlide {0%{transform:translateX(-4px)}50%{transform:translateX(4px)}100%{transform:translateX(-4px)}}
+.mobile-logo{will-change:transform;animation:mobileLogoSlide 6.5s ease-in-out infinite}
+
+@media (prefers-reduced-motion: reduce){.mobile-logo{animation:none}}
+
+/* Font scaling safeguard */
+*{-webkit-text-size-adjust:100%}
+
+/* Adjust hero topline */
+.hero-topline{top:6%;left:50%;transform:translateX(-50%);font-size:0.88rem;padding:0 8px}
+
+/* Center page content with breathing room */
+.page-content{padding:18px 12px 60px}
+.container{padding:0 6px}
+
+/* Ensure images scale */
+img{max-width:100%;height:auto}
+
+/* Specific mobile welcome wrapper inside hero */
+.hero-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px}
+.hero-text{padding:0 8px}
+.logo-wrapper{display:none}
+.hero-caption{display:none}
+
+.mobile-note{font-size:0.9rem;color:var(--muted);margin-top:6px}

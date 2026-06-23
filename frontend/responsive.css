@@ -1,0 +1,84 @@
+/* Mobile-first responsive styles */
+:root{
+  --bg:#050505;
+  --card:#0b0b0b;
+  --muted:#cfcfcf;
+  --accent:#ffd700;
+  --max-width:1100px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:Inter,Segoe UI,Arial,Helvetica,sans-serif;background:var(--bg);color:var(--muted);-webkit-font-smoothing:antialiased;line-height:1.4}
+.container{max-width:var(--max-width);margin:0 auto;padding:16px}
+
+/* Header */
+.site-header{background:linear-gradient(180deg, rgba(0,0,0,0.25), transparent);backdrop-filter:blur(4px);position:sticky;top:0;z-index:40}
+.header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;max-width:var(--max-width);margin:0 auto}
+.logo-wrap{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding:6px}
+.logo{height:56px;width:auto;display:block;will-change:transform}
+
+/* Make logo prominent on small screens */
+@media (max-width:420px){
+  .logo{height:64px}
+}
+
+/* Nav toggle for mobile */
+.nav-toggle{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--muted);font-size:1.3rem;padding:6px 8px}
+.primary-nav{display:none}
+
+/* Hero */
+.hero{padding:28px 16px;text-align:center}
+.hero h1{margin:0 0 12px;font-size:clamp(1.4rem,2.6vw,2.4rem);letter-spacing:0.02em;color:var(--accent)}
+.lead{margin:0 0 18px;font-size:1rem;color:#e6e0c9}
+.cta{display:inline-block;background:var(--accent);color:#050505;padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:1fr;gap:12px;padding:12px}
+.card{background:rgba(255,255,255,0.03);padding:16px;border-radius:12px}
+.card h2{margin:0 0 8px;font-size:1.05rem;color:#fff}
+
+/* Footer */
+.site-footer{text-align:center;padding:20px 10px;color:var(--muted)}
+
+/* Desktop layout */
+@media (min-width:900px){
+  .header-inner{padding:14px 20px}
+  .primary-nav{display:flex;gap:18px;align-items:center}
+  .primary-nav a{color:var(--muted);text-decoration:none;padding:8px 10px;border-radius:8px}
+  .primary-nav a:hover{background:rgba(255,255,255,0.02)}
+  .nav-toggle{display:none}
+  .container{padding:28px}
+  .cards{grid-template-columns:repeat(3,1fr);gap:20px}
+  main{padding:20px 0}
+}
+
+/* Prevent horizontal scroll */
+html,body{overflow-x:hidden}
+
+/* Smooth logo animation - subtle translateX */
+@keyframes logoSlide {
+  0%{transform:translateX(-6px)}
+  50%{transform:translateX(6px)}
+  100%{transform:translateX(-6px)}
+}
+.logo{animation:logoSlide 6s ease-in-out infinite}
+
+/* Respect user motion preference */
+@media (prefers-reduced-motion: reduce){
+  .logo{animation:none}
+}
+
+/* Accessibility: larger tap targets */
+a,button{min-height:44px}
+
+/* Utility small screens spacing */
+@media (max-width:420px){
+  .header-inner{padding:10px}
+  .hero{padding:20px 10px}
+  .card{padding:12px}
+}
+
+/* Ensure images scale */
+img{max-width:100%;height:auto;display:block}
+
+/* Lightweight performance notes: no heavy shadows, no large images by default */
