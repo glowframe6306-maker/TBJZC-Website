@@ -1,13 +1,11 @@
 import re
 import os
 from pathlib import Path
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request
 from datetime import datetime
 
 # Setup paths
 ROOT_DIR = Path(__file__).resolve().parent.parent
-FRONTEND_DIR = ROOT_DIR / 'frontend'
-IMAGES_DIR = ROOT_DIR / 'images'
 
 # Use /tmp on Vercel, otherwise local Feedback directory
 IS_VERCEL = os.environ.get('VERCEL') == '1'
@@ -16,10 +14,14 @@ if IS_VERCEL:
 else:
     FEEDBACK_DIR = ROOT_DIR / 'Feedback'
 
-FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+# Create feedback directory safely
+try:
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 
-# Create Flask app
-app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
+# Create Flask app (no static_folder for serverless)
+app = Flask(__name__)
 
 SCHOOL = {
     "name": "T.B.Jaya Zahira Vidyalaya",
@@ -61,21 +63,6 @@ CLUBS = {
         "president": "M.RM.ALFATH",
     },
 }
-
-@app.route('/')
-def frontpage():
-    return send_from_directory(str(FRONTEND_DIR), 'index.html')
-
-@app.route('/images/<path:filename>')
-def serve_image(filename):
-    return send_from_directory(str(IMAGES_DIR), filename)
-
-@app.route('/<path:filename>')
-def serve_static(filename):
-    file_path = FRONTEND_DIR / filename
-    if file_path.exists() and file_path.is_file():
-        return send_from_directory(str(FRONTEND_DIR), filename)
-    return send_from_directory(str(FRONTEND_DIR), 'index.html')
 
 @app.route('/health')
 def health():

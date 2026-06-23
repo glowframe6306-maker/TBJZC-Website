@@ -1,9 +1,15 @@
 {
   "version": 2,
+  "buildCommand": "echo Building...",
   "builds": [
-    { "src": "api/index.py", "use": "@vercel/python" }
+    { "src": "api/index.py", "use": "@vercel/python" },
+    { "src": "frontend/**", "use": "@vercel/static" },
+    { "src": "images/**", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "/api/index.py" }
+    { "src": "/submit-feedback", "dest": "/api/index.py", "methods": ["POST"] },
+    { "src": "/(health|info|clubs|search)$", "dest": "/api/index.py" },
+    { "src": "/images/(.*)", "dest": "/images/$1" },
+    { "src": "/(.*)", "dest": "/frontend/$1" }
   ]
 }
