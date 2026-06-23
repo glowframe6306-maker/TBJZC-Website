@@ -121,6 +121,22 @@
 
   @media(max-width:560px){.hero-welcome{font-size:0.95em}}
   @media(max-width:560px){.hero-inner{display:flex;flex-direction:column;align-items:center;padding:28px 16px;gap:24px}.logo-wrapper{position:relative;top:auto;left:auto;transform:none;width:220px;height:220px;margin:0 auto 1.5rem}.hero-text{position:relative;transform:none;left:auto;top:auto;min-height:auto;gap:0.8rem;padding:0 8px}.hero-title{font-size:2.4rem;max-width:100%;letter-spacing:0.14em}.hero-caption{font-size:0.95rem;max-width:100%}}
+  /* Small fixed footer */
+  .small-footer{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    background:rgba(0,0,0,0.6);
+    color:var(--muted);
+    font-size:0.85rem;
+    padding:6px 12px;
+    text-align:center;
+    border-top:1px solid rgba(255,215,0,0.08);
+    z-index:9999;
+  }
+  .small-footer a{color:var(--gold);text-decoration:none;font-weight:700}
+  @media (max-width:560px){.small-footer{font-size:0.78rem;padding:8px 10px;}}
 </style>
   <!-- Mobile-specific stylesheet (loads only on small screens) -->
   <link rel="stylesheet" href="welcome-mobile.css" media="(max-width:560px)">
@@ -263,5 +279,6 @@ document.getElementById('backToWelcome').addEventListener('click', () => {
 });
 </script>
   <script src="welcome-mobile.js" defer></script>
+  <footer class="small-footer">© 2026 T.B. Jaya Zahira Vidyalaya — <a href="about.html">About</a></footer>
 </body>
 </html>
