@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
-from docx import Document
+from datetime import datetime
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / 'frontend'
@@ -95,21 +95,12 @@ def submit_feedback():
         if len(message.split()) > 700:
             return jsonify(error='Feedback message must be 700 words or fewer.'), 400
 
-        feedback_path = FEEDBACK_DIR / 'Feedback.docx'
-        if feedback_path.exists():
-            document = Document(str(feedback_path))
-            document.add_paragraph('')
-        else:
-            document = Document()
-
-        document.add_paragraph('Feedback')
-        document.add_paragraph(f'Name - {name}')
-        document.add_paragraph(f'Email - {email}')
-        document.add_paragraph('______________________________')
-        document.add_paragraph('Full details:')
-        for paragraph in message.splitlines():
-            document.add_paragraph(paragraph)
-        document.save(str(feedback_path))
+        feedback_path = FEEDBACK_DIR / 'Feedback.txt'
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        feedback_entry = f"Name - {name}\nEmail - {email}\nSubmitted - {timestamp}\n________________________________\nMessage:\n{message}\n\n"
+        
+        with open(feedback_path, 'a', encoding='utf-8') as f:
+            f.write(feedback_entry)
 
         return jsonify(message='Feedback saved successfully.')
     except Exception as exc:
