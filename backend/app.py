@@ -80,6 +80,11 @@ def serve_static(filename):
     return send_from_directory(str(FRONTEND_DIR), 'index.html')
 
 
+@app.route('/health')
+def health():
+    return jsonify(status='ok', feedback_dir=str(FEEDBACK_DIR), is_vercel=IS_VERCEL)
+
+
 @app.route('/info')
 def info():
     return jsonify(SCHOOL)
@@ -111,16 +116,21 @@ def submit_feedback():
         if len(message.split()) > 700:
             return jsonify(error='Feedback message must be 700 words or fewer.'), 400
 
-        feedback_path = FEEDBACK_DIR / 'Feedback.txt'
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        feedback_entry = f"Name - {name}\nEmail - {email}\nSubmitted - {timestamp}\n________________________________\nMessage:\n{message}\n\n"
-        
-        with open(feedback_path, 'a', encoding='utf-8') as f:
-            f.write(feedback_entry)
+        try:
+            feedback_path = FEEDBACK_DIR / 'Feedback.txt'
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            feedback_entry = f"Name - {name}\nEmail - {email}\nSubmitted - {timestamp}\n________________________________\nMessage:\n{message}\n\n"
+            
+            with open(feedback_path, 'a', encoding='utf-8') as f:
+                f.write(feedback_entry)
+        except IOError as io_err:
+            return jsonify(error=f'Failed to save feedback: {str(io_err)}'), 500
 
         return jsonify(message='Feedback saved successfully.')
     except Exception as exc:
-        return jsonify(error=str(exc) or 'An internal error occurred while saving feedback.'), 500
+        import traceback
+        error_msg = f'{str(exc)} | {traceback.format_exc()}'
+        return jsonify(error=error_msg), 500
 
 
 @app.route('/search')
