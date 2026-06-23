@@ -16,6 +16,7 @@ img{display:block;max-width:100%;height:auto}
 .site-nav a{color:var(--muted);font-size:0.95rem;transition:color .2s ease}
 .site-nav a:hover{color:var(--text)}
 .hero-panel{position:relative;overflow:hidden;padding:88px 32px 108px;background:linear-gradient(180deg, rgba(10,13,20,0.88), rgba(5,6,10,0.98)), url('../images/MAIN GATE.png') center/cover no-repeat}
+hero-panel{position:relative;overflow:hidden;padding:88px 32px 108px;background:linear-gradient(180deg, rgba(10,13,20,0.88), rgba(5,6,10,0.98)), url('../images/gate.jpg') center/cover no-repeat}
 .hero-overlay{position:absolute;inset:0;background:linear-gradient(135deg, rgba(5,6,10,0.55), rgba(8,11,18,0.55));pointer-events:none}
 .hero-content{position:relative;max-width:720px;display:grid;gap:18px}
 .eyebrow{font-size:0.8rem;letter-spacing:0.24em;text-transform:uppercase;color:var(--accent);font-weight:700}
