@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vision and Mission - T.B. Jaya Zahira Vidyalaya</title>
+<style>
+:root{--bg:#050505;--text:#ffd700;--muted:#d4b979;--surface:rgba(255,255,255,0.08);--border:rgba(255,215,0,0.18);}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{min-height:100vh;background:var(--bg);color:#fff;font-family:Georgia, 'Times New Roman', serif;}
+a{color:inherit;text-decoration:none;}
+.page{padding:28px;max-width:1120px;margin:0 auto;}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:32px;flex-wrap:wrap;}
+.page-title{font-size:2.25rem;line-height:1.05;text-transform:uppercase;letter-spacing:0.12em;color:var(--text);}
+.page-subtitle{max-width:720px;color:var(--muted);font-size:1rem;line-height:1.8;}
+.home-link{display:inline-flex;align-items:center;padding:12px 18px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,0.06);color:var(--text);font-weight:700;letter-spacing:0.12em;transition:background 0.2s ease;}
+.home-link:hover{background:rgba(255,255,255,0.12);}
+.gallery{display:grid;gap:24px;}
+.gallery-card{background:var(--surface);border:1px solid var(--border);border-radius:28px;overflow:hidden;cursor:pointer;transition:transform 0.2s ease,box-shadow 0.2s ease;}
+.gallery-card:hover{transform:translateY(-2px);box-shadow:0 18px 45px rgba(0,0,0,0.32);}
+.gallery-card img{width:100%;height:auto;display:block;object-fit:cover;}
+.gallery-card-title{padding:22px 22px 24px;font-size:1.05rem;text-transform:uppercase;letter-spacing:0.16em;color:var(--text);font-weight:900;}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.95);display:none;align-items:center;justify-content:center;z-index:9999;padding:20px;}
+.overlay.open{display:flex;}
+.overlay-content{position:relative;width:100%;max-width:1200px;max-height:100%;display:flex;align-items:center;justify-content:center;}
+.overlay-img{max-width:100%;max-height:100%;border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,0.6);}
+.overlay-close{position:absolute;top:16px;left:16px;padding:12px 18px;border:none;border-radius:999px;background:rgba(255,255,255,0.12);color:#fff;font-size:0.95rem;font-weight:900;letter-spacing:0.14em;cursor:pointer;z-index:1;}
+.overlay-close:hover{background:rgba(255,255,255,0.22);}
+.page-footer{margin-top:40px;padding-top:24px;text-align:center;color:var(--muted);font-size:0.9rem;letter-spacing:0.08em;border-top:1px solid rgba(255,215,0,0.08);}
+@media(min-width:780px){.gallery{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:780px){.page{padding:20px;} .page-title{font-size:1.9rem;} .overlay-close{top:12px;left:12px;}}
+</style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Vision & Mission</h1>
+        <p class="page-subtitle">Click either photo to view it full screen. Use the back button in the top-left corner of the full-screen view to return to this page.</p>
+      </div>
+      <a class="home-link" href="index.html">Back to Home</a>
+    </header>
+
+    <div class="gallery">
+      <article class="gallery-card" data-image="../images/vision.jpeg" tabindex="0">
+        <img src="../images/vision.jpeg" alt="Vision">
+        <div class="gallery-card-title">Vision</div>
+      </article>
+      <article class="gallery-card" data-image="../images/mission.jpeg" tabindex="0">
+        <img src="../images/mission.jpeg" alt="Mission">
+        <div class="gallery-card-title">Mission</div>
+      </article>
+    </div>
+
+    <div class="page-footer">CREATED AND DESIGNED BY M.I. MUHAMMADH — 2025 O/L BATCH</div>
+  </div>
+
+  <div class="overlay" id="imageOverlay" aria-hidden="true">
+    <div class="overlay-content">
+      <button id="closeOverlay" class="overlay-close" type="button">BACK</button>
+      <img id="overlayImage" class="overlay-img" src="" alt="">
+    </div>
+  </div>
+
+  <script>
+    const overlay = document.getElementById('imageOverlay');
+    const overlayImage = document.getElementById('overlayImage');
+    const closeOverlay = document.getElementById('closeOverlay');
+
+    document.querySelectorAll('.gallery-card').forEach(card => {
+      const imageUrl = card.dataset.image;
+      const imageAlt = card.querySelector('img').alt;
+
+      const open = () => {
+        overlayImage.src = imageUrl;
+        overlayImage.alt = imageAlt;
+        overlay.classList.add('open');
+        overlay.setAttribute('aria-hidden', 'false');
+      };
+
+      card.addEventListener('click', open);
+      card.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          open();
+        }
+      });
+    });
+
+    const closeViewer = () => {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+      overlayImage.src = '';
+      overlayImage.alt = '';
+    };
+
+    closeOverlay.addEventListener('click', closeViewer);
+    overlay.addEventListener('click', event => {
+      if (event.target === overlay) closeViewer();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && overlay.classList.contains('open')) {
+        closeViewer();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -24,7 +24,9 @@
   .hero-inner{position:relative;z-index:1;width:min(1200px,100%);padding:40px 24px;max-width:1200px;display:flex;align-items:center;justify-content:center;min-height:100vh}
 
   /* Intro Section */
-  .intro-section{position:fixed;top:0;left:0;width:100%;height:100vh;background:#000;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;animation:introMoveUp 1s ease-in-out 10.8s forwards}
+  .intro-section{position:fixed;top:0;left:0;width:100%;height:100vh;background:#000;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+
+  .intro-section.move-up{animation:introMoveUp 1s ease-in-out forwards;}
 
   .intro-title{font-size:3.5rem;font-weight:900;text-align:center;letter-spacing:0.05em;position:relative;z-index:10;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:0;font-family:Georgia, 'Times New Roman', serif;min-height:200px}
 
@@ -49,6 +51,7 @@
   @keyframes logoFadeOut{0%{opacity:1;background-color:transparent}100%{opacity:0;background-color:#000}}
 
   @keyframes introMoveUp{0%{transform:translateY(0)}100%{transform:translateY(-100vh)}}
+  .intro-section.move-up{animation:introMoveUp 1s ease-in-out forwards;}
 
   @keyframes floatUpDown{0%,100%{transform:translateY(-50%)}50%{transform:translateY(-65%)}}
 
@@ -121,22 +124,6 @@
 
   @media(max-width:560px){.hero-welcome{font-size:0.95em}}
   @media(max-width:560px){.hero-inner{display:flex;flex-direction:column;align-items:center;padding:28px 16px;gap:24px}.logo-wrapper{position:relative;top:auto;left:auto;transform:none;width:220px;height:220px;margin:0 auto 1.5rem}.hero-text{position:relative;transform:none;left:auto;top:auto;min-height:auto;gap:0.8rem;padding:0 8px}.hero-title{font-size:2.4rem;max-width:100%;letter-spacing:0.14em}.hero-caption{font-size:0.95rem;max-width:100%}}
-  /* Small fixed footer */
-  .small-footer{
-    position:fixed;
-    left:0;
-    right:0;
-    bottom:0;
-    background:rgba(0,0,0,0.6);
-    color:var(--muted);
-    font-size:10px;
-    padding:6px 12px;
-    text-align:center;
-    border-top:1px solid rgba(255,215,0,0.08);
-    z-index:9999;
-  }
-  .small-footer a{color:var(--gold);text-decoration:none;font-weight:700}
-  @media (max-width:560px){.small-footer{font-size:0.78rem;padding:8px 10px;}}
 </style>
   <!-- Mobile-specific stylesheet (loads only on small screens) -->
   <link rel="stylesheet" href="welcome-mobile.css" media="(max-width:560px)">
@@ -159,7 +146,7 @@
         <h1 class="hero-title">
           <span class="hero-line-short hero-welcome">WELCOME TO</span>
           <span class="hero-line-long">T.B.JAYAH ZAHIRA COLLEGE</span>
-          <span class="hero-line-short hero-colombo">COLOMBO 02</span></span>
+          <span class="hero-line-short hero-colombo">COLOMBO 02</span>
         </h1>
         <p class="hero-caption"></p>
       </div>
@@ -177,7 +164,7 @@
           <a href="latest-news.html" target="_blank" class="option-card"><img src="../images/updates.png" alt="Latest News"><span class="option-card-text">LATEST NEWS</span></a>
           <a href="sports.html" target="_blank" class="option-card"><img src="../images/sports.png" alt="Sports"><span class="option-card-text">SPORTS</span></a>
           <a href="remarkable-performances.html" target="_blank" class="option-card"><img src="../images/historic.png" alt="Remarkable Performances"><span class="option-card-text">REMARKABLE PERFORMANCES</span></a>
-          <a href="visions-missions.html" target="_blank" class="option-card"><img src="../images/vision.png" alt="Visions and Missions"><span class="option-card-text">VISIONS AND MISSIONS</span></a>
+          <a href="visions-missions.html" target="_blank" rel="noopener noreferrer" class="option-card"><img src="../images/vision.png" alt="Visions and Missions"><span class="option-card-text">VISIONS AND MISSIONS</span></a>
           <a href="examination-results.html" target="_blank" class="option-card"><img src="../images/exam results.png" alt="Examination Results"><span class="option-card-text">EXAMINATION RESULTS</span></a>
           <a href="students-information.html" target="_blank" class="option-card"><img src="../images/student info.png" alt="Students Information"><span class="option-card-text">STUDENTS INFORMATION</span></a>
           <a href="sdec-details.html" target="_blank" class="option-card"><img src="../images/sdec.png" alt="SDEC Details"><span class="option-card-text">SDEC DETAILS</span></a>
@@ -279,6 +266,5 @@ document.getElementById('backToWelcome').addEventListener('click', () => {
 });
 </script>
   <script src="welcome-mobile.js" defer></script>
-  <footer class="small-footer">© 2026 T.B. Jaya Zahira Vidyalaya — <a href="about.html">About</a></footer>
 </body>
 </html>
