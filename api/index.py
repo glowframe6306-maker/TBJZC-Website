@@ -1,17 +1,136 @@
-import sys
+import re
 import os
 from pathlib import Path
+from flask import Flask, jsonify, request, send_from_directory
+from datetime import datetime
 
-# Ensure parent is in path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Setup paths
+ROOT_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = ROOT_DIR / 'frontend'
+IMAGES_DIR = ROOT_DIR / 'images'
 
-try:
-    from backend.app import app
-except ImportError as e:
-    # If import fails, create a minimal error handler
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-    
-    @app.route('/submit-feedback', methods=['POST'])
-    def error_handler():
-        return jsonify(error=f'Import error: {str(e)}'), 500
+# Use /tmp on Vercel, otherwise local Feedback directory
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+if IS_VERCEL:
+    FEEDBACK_DIR = Path('/tmp/feedback')
+else:
+    FEEDBACK_DIR = ROOT_DIR / 'Feedback'
+
+FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+
+# Create Flask app
+app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
+
+SCHOOL = {
+    "name": "T.B.Jaya Zahira Vidyalaya",
+    "founding_year": 1921,
+    "motto": "THE LEARNED IS ONE WHO PRACTICES WHAT HE KNOWS",
+    "medium": ["SINHALA", "TAMIL"],
+    "students_approx": 700,
+    "teachers_approx": 60,
+    "principal": "MR. M.R.M.MANZIL",
+    "website_creator": "M.I.MUHAMMADH (2025 O/L BATCH)",
+    "address": "24, SIR JAMES PEIRIS MAWATHA, COLOMBO 02",
+    "phone": "0112 300 338",
+    "email": "tbjzc2013@gmail.com",
+    "facebook": "https://web.facebook.com/T.BJZAHIRAOFFICIAL/?_rdc=1&_rdr#",
+    "colors": ["MEROON", "YELLOW", "GREEN"],
+    "houses": [
+        {"name": "RAFAH", "color": "GREEN"},
+        {"name": "CAIRO", "color": "YELLOW"},
+        {"name": "JUMAIL", "color": "MEROON"}
+    ],
+    "sports_clubs": ["FOOTBALL", "CRICKET", "HOCKEY", "KARATE", "CHESS"],
+    "achievements": ["All island first places in Islamic cultural competitions", "2024 O/L 9A student"]
+}
+
+CLUBS = {
+    "Sinhala Literary Association": {
+        "teacher_in_charge": "MRS. SRIYANI EKANAYAKE",
+        "president": "M.A. ABDUL AZEEZ",
+        "secretary": "M.I.MUHAMMADH",
+        "vice_president": "MAHDI RIZWI",
+    },
+    "Tamil Literary Association": {
+        "teacher_in_charge": "MRS. M. M. F. MINHA",
+        "president": "M.I.A.ASLAM",
+        "secretary": "M.AKAM",
+    },
+    "English Literary Association": {
+        "teacher_in_charge": "MRS. FAZREEN MOHAMED",
+        "president": "M.RM.ALFATH",
+    },
+}
+
+@app.route('/')
+def frontpage():
+    return send_from_directory(str(FRONTEND_DIR), 'index.html')
+
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    return send_from_directory(str(IMAGES_DIR), filename)
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    file_path = FRONTEND_DIR / filename
+    if file_path.exists() and file_path.is_file():
+        return send_from_directory(str(FRONTEND_DIR), filename)
+    return send_from_directory(str(FRONTEND_DIR), 'index.html')
+
+@app.route('/health')
+def health():
+    return jsonify(status='ok', feedback_dir=str(FEEDBACK_DIR), is_vercel=IS_VERCEL)
+
+@app.route('/info')
+def info():
+    return jsonify(SCHOOL)
+
+@app.route('/clubs')
+def clubs():
+    q = request.args.get('q', '').lower()
+    if q:
+        filtered = {k: v for k, v in CLUBS.items() if q in k.lower()}
+        return jsonify(filtered)
+    return jsonify(CLUBS)
+
+@app.route('/submit-feedback', methods=['POST'])
+def submit_feedback():
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get('name') or '').strip()
+        email = (data.get('email') or '').strip()
+        message = (data.get('message') or '').strip()
+
+        if not name or not email or not message:
+            return jsonify(error='Name, email, and feedback message are required.'), 400
+
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return jsonify(error='A valid email address is required.'), 400
+
+        if len(message.split()) > 700:
+            return jsonify(error='Feedback message must be 700 words or fewer.'), 400
+
+        try:
+            feedback_path = FEEDBACK_DIR / 'Feedback.txt'
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            feedback_entry = f"Name - {name}\nEmail - {email}\nSubmitted - {timestamp}\n________________________________\nMessage:\n{message}\n\n"
+            
+            with open(str(feedback_path), 'a', encoding='utf-8') as f:
+                f.write(feedback_entry)
+        except IOError as io_err:
+            return jsonify(error=f'Failed to save feedback: {str(io_err)}'), 500
+
+        return jsonify(message='Feedback saved successfully.')
+    except Exception as exc:
+        import traceback
+        error_msg = f'{str(exc)} | {traceback.format_exc()}'
+        return jsonify(error=error_msg), 500
+
+@app.route('/search')
+def search():
+    q = request.args.get('q', '').lower()
+    results = {k: v for k, v in CLUBS.items() if q in k.lower()} if q else {}
+    return jsonify(results)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

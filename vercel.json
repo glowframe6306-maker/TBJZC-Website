@@ -1,17 +1,9 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/index.py", "use": "@vercel/python" },
-    { "src": "frontend/**", "use": "@vercel/static" },
-    { "src": "images/**", "use": "@vercel/static" }
+    { "src": "api/index.py", "use": "@vercel/python" }
   ],
   "routes": [
-    { "src": "/api/.*", "dest": "/api/index.py" },
-    { "src": "/submit-feedback", "dest": "/api/index.py", "methods": ["POST"] },
-    { "src": "/info", "dest": "/api/index.py" },
-    { "src": "/clubs", "dest": "/api/index.py" },
-    { "src": "/search", "dest": "/api/index.py" },
-    { "src": "/images/(.*)", "dest": "/images/$1" },
-    { "src": "/(.*)", "dest": "/frontend/$1" }
+    { "src": "/(.*)", "dest": "/api/index.py" }
   ]
 }
