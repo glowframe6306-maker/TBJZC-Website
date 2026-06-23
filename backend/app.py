@@ -1,6 +1,15 @@
-from flask import Flask, jsonify, render_template_string, request
+import re
+from pathlib import Path
+from flask import Flask, jsonify, request, send_from_directory
+from docx import Document
 
-app = Flask(__name__)
+ROOT_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = ROOT_DIR / 'frontend'
+IMAGES_DIR = ROOT_DIR / 'images'
+FEEDBACK_DIR = ROOT_DIR / 'Feedback'
+FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+
+app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
 
 SCHOOL = {
     "name": "T.B.Jaya Zahira Vidyalaya",
@@ -45,6 +54,16 @@ CLUBS = {
 }
 
 
+@app.route('/')
+def frontpage():
+    return app.send_static_file('index.html')
+
+
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    return send_from_directory(str(IMAGES_DIR), filename)
+
+
 @app.route('/info')
 def info():
     return jsonify(SCHOOL)
@@ -59,26 +78,42 @@ def clubs():
     return jsonify(CLUBS)
 
 
-FRONT_HTML = '''
-<!doctype html>
-<html>
-<head><meta charset="utf-8"><title>T.B.Jaya Zahira Vidyalaya</title></head>
-<body style="font-family: Arial, sans-serif; text-align:center;">
-  <h1 style="font-size:48px; margin-top:40px;">T.B.Jaya Zahira Vidyalaya</h1>
-  <p><strong>Motto:</strong> THE LEARNED IS ONE WHO PRACTICES WHAT HE KNOWS</p>
-  <p><strong>Founded:</strong> 1921</p>
-  <form action="/search" method="get">
-    <input name="q" placeholder="Search clubs...">
-    <button type="submit">Search</button>
-  </form>
-</body>
-</html>
-'''
+@app.route('/submit-feedback', methods=['POST'])
+def submit_feedback():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    email = (data.get('email') or '').strip()
+    message = (data.get('message') or '').strip()
 
+    if not name or not email or not message:
+        return jsonify(error='Name, email, and feedback message are required.'), 400
 
-@app.route('/')
-def frontpage():
-    return render_template_string(FRONT_HTML)
+    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        return jsonify(error='A valid email address is required.'), 400
+
+    if len(message.split()) > 700:
+        return jsonify(error='Feedback message must be 700 words or fewer.'), 400
+
+    feedback_path = FEEDBACK_DIR / 'Feedback.docx'
+    if feedback_path.exists():
+        document = Document(str(feedback_path))
+        document.add_paragraph('')
+    else:
+        document = Document()
+
+    document.add_paragraph('Feedback')
+    document.add_paragraph(f'Name - {name}')
+    document.add_paragraph(f'Email - {email}')
+    document.add_paragraph('______________________________')
+    document.add_paragraph('Full details:')
+    for paragraph in message.splitlines():
+        document.add_paragraph(paragraph)
+    document.save(str(feedback_path))
+
+    return jsonify(
+        message='Feedback saved successfully.',
+        details=f'Thank you for submitting the feedback from tbjzc2013@gmail.com to the email address {email}.'
+    )
 
 
 @app.route('/search')
