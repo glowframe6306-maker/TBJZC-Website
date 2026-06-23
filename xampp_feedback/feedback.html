@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Feedback - TBJZC</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>Feedback</h1>
+    <form id="feedbackForm" method="post" action="save_feedback.php">
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" required>
+
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required>
+
+      <label for="message">Feedback (700 words max)</label>
+      <textarea id="message" name="message" rows="8" required></textarea>
+
+      <div class="row">
+        <button type="submit">Submit Feedback</button>
+        <span id="status" role="status"></span>
+      </div>
+    </form>
+    <p class="note">Your feedback will be appended to <strong>Feedback/Feedback.txt</strong>.</p>
+  </main>
+
+<script>
+(function(){
+  const form = document.getElementById('feedbackForm');
+  const statusEl = document.getElementById('status');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    statusEl.textContent = 'Submitting...';
+
+    const formData = new FormData(form);
+
+    // Basic client-side word limit enforcement
+    const message = formData.get('message') || '';
+    const wordCount = message.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount > 700) {
+      statusEl.textContent = 'Message exceeds 700-word limit.';
+      return;
+    }
+
+    try {
+      const resp = await fetch('save_feedback.php', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Unknown error');
+
+      statusEl.textContent = data.message || 'Saved';
+      form.reset();
+    } catch (err) {
+      statusEl.textContent = err.message;
+    }
+  });
+})();
+</script>
+</body>
+</html>
