@@ -80,40 +80,40 @@ def clubs():
 
 @app.route('/submit-feedback', methods=['POST'])
 def submit_feedback():
-    data = request.get_json(silent=True) or {}
-    name = (data.get('name') or '').strip()
-    email = (data.get('email') or '').strip()
-    message = (data.get('message') or '').strip()
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get('name') or '').strip()
+        email = (data.get('email') or '').strip()
+        message = (data.get('message') or '').strip()
 
-    if not name or not email or not message:
-        return jsonify(error='Name, email, and feedback message are required.'), 400
+        if not name or not email or not message:
+            return jsonify(error='Name, email, and feedback message are required.'), 400
 
-    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
-        return jsonify(error='A valid email address is required.'), 400
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return jsonify(error='A valid email address is required.'), 400
 
-    if len(message.split()) > 700:
-        return jsonify(error='Feedback message must be 700 words or fewer.'), 400
+        if len(message.split()) > 700:
+            return jsonify(error='Feedback message must be 700 words or fewer.'), 400
 
-    feedback_path = FEEDBACK_DIR / 'Feedback.docx'
-    if feedback_path.exists():
-        document = Document(str(feedback_path))
-        document.add_paragraph('')
-    else:
-        document = Document()
+        feedback_path = FEEDBACK_DIR / 'Feedback.docx'
+        if feedback_path.exists():
+            document = Document(str(feedback_path))
+            document.add_paragraph('')
+        else:
+            document = Document()
 
-    document.add_paragraph('Feedback')
-    document.add_paragraph(f'Name - {name}')
-    document.add_paragraph(f'Email - {email}')
-    document.add_paragraph('______________________________')
-    document.add_paragraph('Full details:')
-    for paragraph in message.splitlines():
-        document.add_paragraph(paragraph)
-    document.save(str(feedback_path))
+        document.add_paragraph('Feedback')
+        document.add_paragraph(f'Name - {name}')
+        document.add_paragraph(f'Email - {email}')
+        document.add_paragraph('______________________________')
+        document.add_paragraph('Full details:')
+        for paragraph in message.splitlines():
+            document.add_paragraph(paragraph)
+        document.save(str(feedback_path))
 
-    return jsonify(
-        message='Feedback saved successfully.',
-        details=f'Thank you for submitting the feedback from tbjzc2013@gmail.com to the email address {email}.'
-    )
+        return jsonify(message='Feedback saved successfully.')
+    except Exception as exc:
+        return jsonify(error=str(exc) or 'An internal error occurred while saving feedback.'), 500
 
 
 @app.route('/search')

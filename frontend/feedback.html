@@ -125,11 +125,20 @@ form.addEventListener('submit', async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, message })
     });
-    const data = await response.json();
+
+    let data;
+    const text = await response.text();
+    try {
+      data = JSON.parse(text);
+    } catch (jsonError) {
+      throw new Error(text || 'Invalid server response received.');
+    }
+
     if (!response.ok) throw new Error(data.error || 'Unable to submit feedback.');
 
-    statusEl.innerHTML = `Thank you for submitting the feedback from tbjzc2013@gmail.com to the email address ${email}.<br><br>${sentence100}`;
+    statusEl.textContent = data.message || 'Feedback saved successfully.';
     statusEl.className = 'status-message success';
+    statusEl.style.display = 'block';
     form.reset();
     wordCountEl.textContent = '0 / 700 words';
   } catch (error) {
