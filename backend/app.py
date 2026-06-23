@@ -1,4 +1,5 @@
 import re
+import os
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from datetime import datetime
@@ -6,7 +7,14 @@ from datetime import datetime
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / 'frontend'
 IMAGES_DIR = ROOT_DIR / 'images'
-FEEDBACK_DIR = ROOT_DIR / 'Feedback'
+
+# Use /tmp on Vercel (serverless), otherwise use local Feedback directory
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+if IS_VERCEL:
+    FEEDBACK_DIR = Path('/tmp/feedback')
+else:
+    FEEDBACK_DIR = ROOT_DIR / 'Feedback'
+
 FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
@@ -56,12 +64,20 @@ CLUBS = {
 
 @app.route('/')
 def frontpage():
-    return app.send_static_file('index.html')
+    return send_from_directory(str(FRONTEND_DIR), 'index.html')
 
 
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     return send_from_directory(str(IMAGES_DIR), filename)
+
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    file_path = FRONTEND_DIR / filename
+    if file_path.exists() and file_path.is_file():
+        return send_from_directory(str(FRONTEND_DIR), filename)
+    return send_from_directory(str(FRONTEND_DIR), 'index.html')
 
 
 @app.route('/info')
