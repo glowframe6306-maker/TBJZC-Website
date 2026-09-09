@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 import re
 import sqlite3
@@ -16,6 +17,17 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_USER_ROLES = {'DEVELOPER', 'CYBER SECURITY', 'MAIN ADMIN', 'ADMIN'}
 ALL_ADMIN_ROLES = {'SUPER_ADMIN', *ALLOWED_USER_ROLES}
+POST_SECTIONS = [
+    {'value': 'houses', 'label': 'HOUSES'},
+    {'value': 'clubs-and-societies', 'label': 'CLUBS AND SOCIETIES'},
+    {'value': 'achievements', 'label': 'ACHIEVEMENTS'},
+    {'value': 'latest-news', 'label': 'LATEST NEWS'},
+    {'value': 'sports', 'label': 'SPORTS'},
+]
+POST_SECTION_VALUES = {section['value'] for section in POST_SECTIONS}
+EXCLUDED_POST_SECTIONS = {
+    'about-us', 'academic-staff', 'visions-and-missions', 'examination-results', 'feedback-and-suggestions',
+}
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / 'frontend'
@@ -119,6 +131,44 @@ def request_device_info():
             break
     device_type = 'Mobile' if any(marker in lowered for marker in ('mobile', 'android', 'iphone', 'ipad')) else 'Desktop'
     return f'{operating_system} / {browser} / {device_type}'
+
+
+def save_post_images(files):
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    upload_dir = IMAGES_DIR / 'uploads'
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    saved = []
+    try:
+        for uploaded in files[:10]:
+            if not uploaded or not uploaded.filename:
+                continue
+            filename = secure_filename(uploaded.filename)
+            extension = Path(filename).suffix.lower()
+            if extension not in allowed_extensions or not (uploaded.mimetype or '').startswith('image/'):
+                raise ValueError('Only JPG, PNG, GIF, and WEBP images are allowed.')
+            stored_name = f'{uuid.uuid4().hex}{extension}'
+            destination = upload_dir / stored_name
+            uploaded.save(destination)
+            if destination.stat().st_size > 5 * 1024 * 1024:
+                destination.unlink(missing_ok=True)
+                raise ValueError('Each image must be 5 MB or smaller.')
+            saved.append(f'/images/uploads/{stored_name}')
+    except Exception:
+        for url in saved:
+            (upload_dir / Path(url).name).unlink(missing_ok=True)
+        raise
+    return saved
+
+
+def serialize_post(row):
+    post = dict(row)
+    try:
+        post['images'] = json.loads(post.get('images') or '[]')
+    except (TypeError, json.JSONDecodeError):
+        post['images'] = []
+    if not post['images'] and post.get('featured_image'):
+        post['images'] = [post['featured_image']]
+    return post
 
 
 def log_security_alert(alert_type, description, severity='medium', module=None, admin_id=None, account=None):
@@ -246,9 +296,11 @@ def ensure_default_data():
             short_description TEXT,
             content TEXT,
             category TEXT,
+            section TEXT,
             author TEXT,
             status TEXT,
             featured_image TEXT,
+            images TEXT,
             tags TEXT,
             publish_date TEXT,
             created_at TEXT,
@@ -368,10 +420,17 @@ def ensure_default_data():
         ('activity_logs', 'actor_name', 'TEXT'),
         ('activity_logs', 'actor_email', 'TEXT'),
         ('activity_logs', 'device_info', 'TEXT'),
+        ('posts', 'section', 'TEXT'),
+        ('posts', 'images', 'TEXT'),
     ]:
         existing_columns = {row['name'] for row in conn.execute(f'PRAGMA table_info({table_name})').fetchall()}
         if column_name not in existing_columns:
             conn.execute(f'ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}')
+    for section in POST_SECTIONS:
+        conn.execute(
+            "UPDATE posts SET section = ? WHERE (section IS NULL OR section = '') AND lower(replace(category, ' ', '-')) = ?",
+            (section['value'], section['value']),
+        )
 
     admin_username, admin_password = get_admin_credentials()
     admin_count = conn.execute('SELECT COUNT(*) FROM admins').fetchone()[0]
@@ -828,43 +887,115 @@ def dashboard_summary():
     return jsonify({'stats': stats, 'recent_activity': recent_activity, 'alerts': alerts})
 
 
+@app.route('/api/post-sections', methods=['GET'])
+def post_sections():
+    return jsonify(POST_SECTIONS)
+
+
+@app.route('/api/posts', methods=['GET'])
+def public_posts():
+    section = (request.args.get('section') or '').strip().lower()
+    if section and section not in POST_SECTION_VALUES:
+        return jsonify(error='Unknown post section.'), 400
+    conn = get_db()
+    if section:
+        rows = conn.execute(
+            "SELECT * FROM posts WHERE section = ? AND status = 'published' ORDER BY created_at DESC",
+            (section,),
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM posts WHERE status = 'published' ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return jsonify([serialize_post(row) for row in rows])
+
+
 @app.route('/api/admin/posts', methods=['GET', 'POST'])
 @require_admin
 def manage_posts():
-    conn = get_db()
     if request.method == 'GET':
+        conn = get_db()
         rows = conn.execute('SELECT * FROM posts ORDER BY created_at DESC').fetchall()
-        return jsonify([dict(row) for row in rows])
+        conn.close()
+        return jsonify([serialize_post(row) for row in rows])
 
-    payload = request.get_json(silent=True) or {}
-    title = (payload.get('title') or '').strip()
-    if not title:
-        return jsonify(error='Post title is required.'), 400
+    if request.content_type and request.content_type.startswith('multipart/form-data'):
+        payload = request.form
+        uploaded_files = request.files.getlist('photos')
+    else:
+        payload = request.get_json(silent=True) or {}
+        uploaded_files = []
 
-    conn.execute(
+    section = (payload.get('section') or '').strip().lower()
+    title = (payload.get('title') or payload.get('heading') or '').strip()
+    description = (payload.get('description') or payload.get('content') or payload.get('short_description') or '').strip()
+    if section not in POST_SECTION_VALUES or section in EXCLUDED_POST_SECTIONS:
+        return jsonify(error='A valid news/content section is required.'), 400
+    if not title or len(title) > 200:
+        return jsonify(error='Post heading is required and must be 200 characters or fewer.'), 400
+    if not description:
+        return jsonify(error='Post description is required.'), 400
+
+    images = []
+    try:
+        if uploaded_files:
+            images = save_post_images(uploaded_files)
+        elif isinstance(payload, dict):
+            images = payload.get('images') or []
+            if not isinstance(images, list) or any(not isinstance(image, str) or not image.startswith('/images/') for image in images):
+                return jsonify(error='Post images must be stored image paths.'), 400
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+
+    now = iso_now()
+    author = session.get('admin', {}).get('full_name', 'Administrator')
+    conn = get_db()
+    cursor = conn.execute(
         '''
-        INSERT INTO posts (title, short_description, content, category, author, status, featured_image, tags, publish_date, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO posts (title, short_description, content, category, section, author, status, featured_image, images, tags, publish_date, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
-        (
-            title,
-            payload.get('short_description') or '',
-            payload.get('content') or '',
-            payload.get('category') or 'General',
-            payload.get('author') or session.get('admin', {}).get('full_name', 'Administrator'),
-            payload.get('status') or 'draft',
-            payload.get('featured_image') or '',
-            ','.join(payload.get('tags') or []),
-            payload.get('publish_date') or iso_now(),
-            iso_now(),
-            iso_now(),
-        ),
+        (title, description, description, section, section, author, payload.get('status') or 'published', images[0] if images else '', json.dumps(images), '', payload.get('publish_date') or now, now, now),
     )
     conn.commit()
-    post_id = conn.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
-    log_activity('create_post', target=f'post:{post_id}', details=f'Created post: {title}', admin_id=session['admin_id'])
+    post_id = cursor.lastrowid
     conn.close()
-    return jsonify(message='Post created successfully.'), 201
+    log_activity('create_post', target=f'post:{post_id}', details=f'Created post in {section}: {title}', admin_id=session['admin_id'])
+    return jsonify(message='Post published successfully.', id=post_id, section=section, images=images), 201
+
+
+@app.route('/api/admin/posts/<int:post_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def edit_or_delete_post(post_id):
+    conn = get_db()
+    post = conn.execute('SELECT * FROM posts WHERE id = ?', (post_id,)).fetchone()
+    if not post:
+        conn.close()
+        return jsonify(error='Post not found.'), 404
+    if request.method == 'DELETE':
+        conn.execute('DELETE FROM posts WHERE id = ?', (post_id,))
+        conn.commit()
+        conn.close()
+        log_activity('delete_post', target=f'post:{post_id}', details=f'Deleted post: {post["title"]}', admin_id=session['admin_id'])
+        return jsonify(message='Post deleted successfully.')
+
+    payload = request.get_json(silent=True) or {}
+    section = (payload.get('section') or '').strip().lower()
+    title = (payload.get('title') or payload.get('heading') or '').strip()
+    description = (payload.get('description') or payload.get('content') or '').strip()
+    if section not in POST_SECTION_VALUES or section in EXCLUDED_POST_SECTIONS:
+        conn.close()
+        return jsonify(error='A valid news/content section is required.'), 400
+    if not title or not description:
+        conn.close()
+        return jsonify(error='Post heading and description are required.'), 400
+    conn.execute(
+        'UPDATE posts SET title = ?, short_description = ?, content = ?, category = ?, section = ?, status = ?, updated_at = ? WHERE id = ?',
+        (title, description, description, section, section, payload.get('status') or post['status'], iso_now(), post_id),
+    )
+    conn.commit()
+    conn.close()
+    log_activity('edit_post', target=f'post:{post_id}', details=f'Updated post in {section}: {title}', admin_id=session['admin_id'])
+    return jsonify(message='Post updated successfully.', section=section)
 
 
 @app.route('/api/admin/announcements', methods=['GET', 'POST'])

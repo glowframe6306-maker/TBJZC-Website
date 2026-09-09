@@ -280,7 +280,28 @@
           </div>
           <div id="resourceSection" class="admin-section hidden">
             <div id="resourceAlert" class="alert"></div>
-            <div class="card panel">
+            <div id="postWorkspace" class="hidden">
+              <div class="card panel">
+                <div class="panel-header">
+                  <h2 class="panel-title">Recent Posts</h2>
+                  <button id="createPostButton" class="primary-btn" type="button">+ Create New Post</button>
+                </div>
+                <div id="recentPostsList" class="activity-list"></div>
+              </div>
+              <div id="postFormPanel" class="card panel hidden" style="margin-top:18px;">
+                <div class="panel-header"><h2 class="panel-title">Create New Post</h2></div>
+                <form id="postForm" enctype="multipart/form-data">
+                  <div class="field"><label for="postSection">Choose Your Section</label><select id="postSection" required><option value="">Loading sections...</option></select></div>
+                  <div class="field"><label for="postHeading">Enter Heading</label><input id="postHeading" maxlength="200" required /></div>
+                  <div class="field"><label for="postDescription">Describe About That</label><textarea id="postDescription" rows="7" required></textarea></div>
+                  <div class="field"><label for="postPhotos">Upload Photos</label><input id="postPhotos" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple /></div>
+                  <div id="postPreview" class="photos"></div>
+                  <div id="postFormAlert" class="alert"></div>
+                  <button class="primary-btn" type="submit">Publish Post</button>
+                </form>
+              </div>
+            </div>
+            <div id="genericResourcePanel" class="card panel">
               <div class="panel-header">
                 <h2 id="resourceTitle" class="panel-title"></h2>
               </div>
@@ -312,6 +333,18 @@
       const resourceAlert = document.getElementById('resourceAlert');
       const resourceTitle = document.getElementById('resourceTitle');
       const resourceContent = document.getElementById('resourceContent');
+      const genericResourcePanel = document.getElementById('genericResourcePanel');
+      const postWorkspace = document.getElementById('postWorkspace');
+      const postFormPanel = document.getElementById('postFormPanel');
+      const createPostButton = document.getElementById('createPostButton');
+      const postForm = document.getElementById('postForm');
+      const postSection = document.getElementById('postSection');
+      const postPhotos = document.getElementById('postPhotos');
+      const postPreview = document.getElementById('postPreview');
+      const recentPostsList = document.getElementById('recentPostsList');
+      const postFormAlert = document.getElementById('postFormAlert');
+      let selectedPostFiles = [];
+      let editingPostId = null;
       const pendingPanel = document.getElementById('pendingApprovalsPanel');
       const alertsPanel = document.getElementById('alertsPanel');
       const createUserPanel = document.getElementById('createUserPanel');
@@ -340,11 +373,15 @@
         const requestUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
         let response;
         try {
-          response = await fetch(requestUrl, {
+          const requestOptions = {
+            ...options,
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            ...options
-          });
+            headers: { ...(options.headers || {}) }
+          };
+          if (!(options.body instanceof FormData)) {
+            requestOptions.headers['Content-Type'] = 'application/json';
+          }
+          response = await fetch(requestUrl, requestOptions);
         } catch (error) {
           throw new Error('Unable to reach the admin API. Please check the deployed backend and try again.');
         }
@@ -414,6 +451,135 @@
           .replaceAll('"', '&quot;')
           .replaceAll("'", '&#039;');
       }
+
+      async function loadPostSections() {
+        const sections = await apiRequest('/api/post-sections');
+        postSection.innerHTML = '<option value="">Select a section</option>' + sections.map(section => `<option value="${escapeHtml(section.value)}">${escapeHtml(section.label)}</option>`).join('');
+      }
+
+      function renderPostPreviews() {
+        postPreview.innerHTML = selectedPostFiles.map((file, index) => `
+          <div style="position:relative;">
+            <img src="${URL.createObjectURL(file)}" alt="Selected photo ${index + 1}" style="width:140px;height:100px;object-fit:cover;border-radius:8px;">
+            <button type="button" class="danger-btn remove-post-photo" data-index="${index}" style="position:absolute;right:4px;top:4px;padding:4px 8px;">Remove</button>
+          </div>`).join('');
+      }
+
+      function resetPostForm() {
+        editingPostId = null;
+        postForm.reset();
+        selectedPostFiles = [];
+        postPhotos.value = '';
+        postPreview.innerHTML = '';
+        postFormPanel.classList.add('hidden');
+        hideAlert(postFormAlert);
+      }
+
+      function renderRecentPosts(posts) {
+        if (!posts.length) {
+          recentPostsList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No posts created yet.</div></div></div>';
+          return;
+        }
+        recentPostsList.innerHTML = posts.map(post => {
+          const image = (post.images || [])[0];
+          return `<div class="activity-item">
+            ${image ? `<img src="${escapeHtml(image)}" alt="" style="width:72px;height:54px;object-fit:cover;border-radius:8px;">` : ''}
+            <div class="activity-meta">
+              <div class="activity-name">${escapeHtml(post.title)}</div>
+              <div class="activity-time">${escapeHtml((post.section || post.category || 'Unassigned').toUpperCase())} · ${escapeHtml(post.short_description || '')} · ${escapeHtml(post.created_at || '')} · ${escapeHtml(post.author || '')}</div>
+            </div>
+            <button class="mini-btn edit-post" data-id="${post.id}">Edit</button>
+            <button class="danger-btn delete-post" data-id="${post.id}">Delete</button>
+          </div>`;
+        }).join('');
+      }
+
+      async function showPostWorkspace() {
+        postWorkspace.classList.remove('hidden');
+        genericResourcePanel.classList.add('hidden');
+        resourceTitle.textContent = 'New Post';
+        await loadPostSections();
+        const posts = await apiRequest('/api/admin/posts');
+        renderRecentPosts(posts);
+      }
+
+      async function refreshPostWorkspace() {
+        const posts = await apiRequest('/api/admin/posts');
+        renderRecentPosts(posts);
+      }
+
+      postPhotos.addEventListener('change', () => {
+        selectedPostFiles = [...postPhotos.files].slice(0, 10);
+        renderPostPreviews();
+      });
+
+      postPreview.addEventListener('click', event => {
+        const button = event.target.closest('.remove-post-photo');
+        if (!button) return;
+        selectedPostFiles.splice(Number(button.dataset.index), 1);
+        const transfer = new DataTransfer();
+        selectedPostFiles.forEach(file => transfer.items.add(file));
+        postPhotos.files = transfer.files;
+        renderPostPreviews();
+      });
+
+      createPostButton.addEventListener('click', () => {
+        resetPostForm();
+        postFormPanel.classList.remove('hidden');
+      });
+
+      recentPostsList.addEventListener('click', async event => {
+        const editButton = event.target.closest('.edit-post');
+        const deleteButton = event.target.closest('.delete-post');
+        if (deleteButton) {
+          try {
+            await apiRequest(`/api/admin/posts/${deleteButton.dataset.id}`, { method: 'DELETE' });
+            await refreshPostWorkspace();
+          } catch (error) {
+            showAlert(resourceAlert, error.message, 'error');
+          }
+          return;
+        }
+        if (editButton) {
+          const posts = await apiRequest('/api/admin/posts');
+          const post = posts.find(item => String(item.id) === editButton.dataset.id);
+          if (!post) return;
+          editingPostId = post.id;
+          postSection.value = post.section || '';
+          document.getElementById('postHeading').value = post.title || '';
+          document.getElementById('postDescription').value = post.content || post.short_description || '';
+          postFormPanel.classList.remove('hidden');
+        }
+      });
+
+      postForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        hideAlert(postFormAlert);
+        try {
+          if (editingPostId) {
+            await apiRequest(`/api/admin/posts/${editingPostId}`, {
+              method: 'PUT',
+              body: JSON.stringify({
+                section: postSection.value,
+                title: document.getElementById('postHeading').value.trim(),
+                description: document.getElementById('postDescription').value.trim()
+              })
+            });
+          } else {
+            const formData = new FormData();
+            formData.append('section', postSection.value);
+            formData.append('title', document.getElementById('postHeading').value.trim());
+            formData.append('description', document.getElementById('postDescription').value.trim());
+            selectedPostFiles.forEach(file => formData.append('photos', file));
+            await apiRequest('/api/admin/posts', { method: 'POST', body: formData });
+          }
+          showAlert(postFormAlert, editingPostId ? 'Post updated successfully.' : 'Post published successfully.', 'success');
+          await refreshPostWorkspace();
+          if (!editingPostId) resetPostForm();
+        } catch (error) {
+          showAlert(postFormAlert, error.message, 'error');
+        }
+      });
 
       function renderRecentActivities(items) {
         if (!items.length) {
@@ -559,8 +725,16 @@
         pageTitle.textContent = item ? item.querySelector('.text').textContent : 'Dashboard';
         hideAlert(dashboardAlert);
         hideAlert(resourceAlert);
+        postWorkspace.classList.add('hidden');
+        genericResourcePanel.classList.remove('hidden');
         if (isDashboard) {
           loadDashboardData();
+          return;
+        }
+
+        if (sectionId === 'posts') {
+          resourceSection.classList.remove('hidden');
+          await showPostWorkspace();
           return;
         }
 

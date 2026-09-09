@@ -1,4 +1,5 @@
 import unittest
+import io
 import uuid
 
 from backend.app import app
@@ -128,6 +129,61 @@ class AdminAuthTests(unittest.TestCase):
         self.assertIn('account_approved', activity_names)
         self.assertIn('account_denied', activity_names)
         self.assertIn('user_created', activity_names)
+
+    def test_posts_use_validated_sections_and_public_filters(self):
+        sections = self.client.get('/api/post-sections')
+        self.assertEqual(sections.status_code, 200)
+        values = {item['value'] for item in sections.get_json()}
+        self.assertIn('sports', values)
+        self.assertIn('achievements', values)
+        self.assertIn('latest-news', values)
+        self.assertNotIn('about-us', values)
+        self.assertNotIn('academic-staff', values)
+        self.assertNotIn('visions-and-missions', values)
+        self.assertNotIn('examination-results', values)
+        self.assertNotIn('feedback-and-suggestions', values)
+
+        login = self.client.post('/api/admin/login', json={
+            'username': 'admin',
+            'password': 'admin123',
+        })
+        self.assertEqual(login.status_code, 200)
+        suffix = uuid.uuid4().hex[:8]
+        sports_post = self.client.post('/api/admin/posts', data={
+            'section': 'sports',
+            'title': f'Sports Test {suffix}',
+            'description': 'Sports description',
+            'photos': (io.BytesIO(b'not-a-real-image'), 'test.txt'),
+        }, content_type='multipart/form-data')
+        self.assertEqual(sports_post.status_code, 400)
+
+        sports_post = self.client.post('/api/admin/posts', json={
+            'section': 'sports',
+            'title': f'Sports Test {suffix}',
+            'description': 'Sports description',
+        })
+        self.assertEqual(sports_post.status_code, 201)
+        achievement_post = self.client.post('/api/admin/posts', json={
+            'section': 'achievements',
+            'title': f'Achievement Test {suffix}',
+            'description': 'Achievement description',
+        })
+        self.assertEqual(achievement_post.status_code, 201)
+        excluded = self.client.post('/api/admin/posts', json={
+            'section': 'about-us',
+            'title': 'Invalid destination',
+            'description': 'Should be rejected',
+        })
+        self.assertEqual(excluded.status_code, 400)
+
+        sports = self.client.get('/api/posts?section=sports').get_json()
+        achievements = self.client.get('/api/posts?section=achievements').get_json()
+        sports_titles = {post['title'] for post in sports}
+        achievement_titles = {post['title'] for post in achievements}
+        self.assertIn(f'Sports Test {suffix}', sports_titles)
+        self.assertNotIn(f'Sports Test {suffix}', achievement_titles)
+        self.assertIn(f'Achievement Test {suffix}', achievement_titles)
+        self.assertNotIn(f'Achievement Test {suffix}', sports_titles)
 
 
 if __name__ == '__main__':
