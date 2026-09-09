@@ -272,7 +272,7 @@
         let response;
         try {
           response = await fetch(requestUrl, {
-            credentials: 'same-origin',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             ...options
           });

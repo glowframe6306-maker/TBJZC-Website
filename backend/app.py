@@ -33,12 +33,16 @@ DB_PATH = DATA_DIR / 'tbjzc_cms.db'
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
 secret_key = os.environ.get('FLASK_SECRET_KEY')
 if not secret_key:
-    logger.warning('FLASK_SECRET_KEY is missing; generating an ephemeral key for this runtime only.')
+    if IS_VERCEL:
+        logger.error('FLASK_SECRET_KEY is missing in the Vercel runtime. Set FLASK_SECRET_KEY in Vercel to keep admin sessions stable across requests.')
+        raise RuntimeError('FLASK_SECRET_KEY must be configured in Vercel for secure admin sessions.')
+    logger.warning('FLASK_SECRET_KEY is missing; generating a temporary development-only key.')
     secret_key = os.urandom(32).hex()
 app.secret_key = secret_key
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = IS_VERCEL
+app.config['SESSION_COOKIE_PATH'] = '/'
 app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 
@@ -73,11 +77,16 @@ def ensure_session_valid():
         try:
             if datetime.utcnow() > datetime.fromisoformat(expires_at):
                 session.clear()
+                logger.info('Session expired for admin request: %s', request.path)
                 return False
         except ValueError:
             session.clear()
+            logger.warning('Session timestamp invalid for request: %s', request.path)
             return False
-    return 'admin_id' in session
+    is_valid = 'admin_id' in session
+    if not is_valid:
+        logger.info('No active admin session for request: %s', request.path)
+    return is_valid
 
 
 def current_admin_record():
@@ -412,6 +421,7 @@ def check_session_timeout():
     public_admin_routes = {'/api/admin/login', '/api/admin/session', '/api/admin/health'}
     if request.path.startswith('/api/admin') and request.path not in public_admin_routes:
         if not ensure_session_valid():
+            logger.info('Blocked protected admin request without valid session: %s', request.path)
             return jsonify(error='Authentication required.'), 401
 
 
