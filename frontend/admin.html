@@ -155,15 +155,15 @@
         <div class="nav-section">
           <div class="nav-label">Navigation</div>
           <ul class="nav-list">
-            <li class="nav-item active" data-api="/api/admin/dashboard/summary"><span class="icon">▣</span><span class="text">Dashboard</span><span class="bullet"></span></li>
-            <li class="nav-item" data-api="/api/admin/posts"><span class="icon">✎</span><span class="text">New Post</span></li>
-            <li class="nav-item" data-api="/api/admin/posts"><span class="icon">📰</span><span class="text">Posts</span></li>
-            <li class="nav-item" data-api="/api/admin/announcements"><span class="icon">📣</span><span class="text">Announcements</span></li>
-            <li class="nav-item" data-api="/api/admin/media"><span class="icon">🖼️</span><span class="text">Media Library</span></li>
-            <li class="nav-item" data-api="/api/admin/school"><span class="icon">🏫</span><span class="text">School Details</span></li>
-            <li class="nav-item" data-api="/api/admin/users"><span class="icon">👥</span><span class="text">Users</span></li>
-            <li class="nav-item" data-api="/api/admin/messages"><span class="icon">💬</span><span class="text">Messages</span></li>
-            <li class="nav-item" data-api="/api/admin/settings"><span class="icon">⚙️</span><span class="text">Settings</span></li>
+            <li class="nav-item active" data-section="dashboard" data-api="/api/admin/dashboard/summary"><span class="icon">▣</span><span class="text">Dashboard</span><span class="bullet"></span></li>
+            <li class="nav-item" data-section="posts" data-api="/api/admin/posts"><span class="icon">✎</span><span class="text">New Post</span></li>
+            <li class="nav-item" data-section="posts" data-api="/api/admin/posts"><span class="icon">📰</span><span class="text">Posts</span></li>
+            <li class="nav-item" data-section="announcements" data-api="/api/admin/announcements"><span class="icon">📣</span><span class="text">Announcements</span></li>
+            <li class="nav-item" data-section="media" data-api="/api/admin/media"><span class="icon">🖼️</span><span class="text">Media Library</span></li>
+            <li class="nav-item" data-section="school" data-api="/api/admin/school"><span class="icon">🏫</span><span class="text">School Details</span></li>
+            <li class="nav-item" data-section="users" data-api="/api/admin/users"><span class="icon">👥</span><span class="text">Users</span></li>
+            <li class="nav-item" data-section="messages" data-api="/api/admin/messages"><span class="icon">💬</span><span class="text">Messages</span></li>
+            <li class="nav-item" data-section="settings" data-api="/api/admin/settings"><span class="icon">⚙️</span><span class="text">Settings</span></li>
           </ul>
         </div>
 
@@ -194,6 +194,7 @@
         </header>
 
         <div class="content">
+          <div id="dashboardSection" class="admin-section">
           <div id="dashboardAlert" class="alert"></div>
           <div class="stats-grid">
             <div class="card stat-card">
@@ -238,6 +239,16 @@
               </div>
             </div>
           </div>
+          </div>
+          <div id="resourceSection" class="admin-section hidden">
+            <div id="resourceAlert" class="alert"></div>
+            <div class="card panel">
+              <div class="panel-header">
+                <h2 id="resourceTitle" class="panel-title"></h2>
+              </div>
+              <div id="resourceContent"></div>
+            </div>
+          </div>
         </div>
       </main>
     </div>
@@ -257,6 +268,12 @@
       const userAvatar = document.getElementById('userAvatar');
       const navItems = [...document.querySelectorAll('.nav-item')];
       const actionButtons = [...document.querySelectorAll('.action-btn')];
+      const pageTitle = document.querySelector('.page-title');
+      const dashboardSection = document.getElementById('dashboardSection');
+      const resourceSection = document.getElementById('resourceSection');
+      const resourceAlert = document.getElementById('resourceAlert');
+      const resourceTitle = document.getElementById('resourceTitle');
+      const resourceContent = document.getElementById('resourceContent');
       let authenticatedAdmin = null;
       let sessionCheckPromise = null;
 
@@ -332,19 +349,60 @@
         hideAlert(dashboardAlert);
         loginScreen.classList.add('hidden');
         appShell.classList.remove('hidden');
+        pageTitle.textContent = 'Dashboard';
+        dashboardSection.classList.remove('hidden');
+        resourceSection.classList.add('hidden');
         adminName.textContent = admin.full_name || admin.username || 'Admin';
         adminRole.textContent = admin.role || 'Administrator';
         userAvatar.textContent = (admin.full_name || admin.username || 'A').charAt(0).toUpperCase();
         loadDashboardData();
       }
 
-      async function loadAdminResource(item) {
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#039;');
+      }
+
+      function renderResource(data) {
+        const rows = Array.isArray(data) ? data : [data];
+        if (!rows.length || (rows.length === 1 && !Object.keys(rows[0] || {}).length)) {
+          resourceContent.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No records found.</div></div></div>';
+          return;
+        }
+
+        const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))];
+        resourceContent.innerHTML = `
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+              <thead><tr>${columns.map(column => `<th style="text-align:left; padding:10px; border-bottom:1px solid var(--border);">${escapeHtml(column.replaceAll('_', ' '))}</th>`).join('')}</tr></thead>
+              <tbody>${rows.map(row => `<tr>${columns.map(column => `<td style="padding:10px; border-bottom:1px solid var(--border); color:var(--muted);">${escapeHtml(typeof row?.[column] === 'object' ? JSON.stringify(row[column]) : row?.[column])}</td>`).join('')}</tr>`).join('')}</tbody>
+            </table>
+          </div>`;
+      }
+
+      async function showSection(sectionId, item) {
         navItems.forEach(navItem => navItem.classList.toggle('active', navItem === item));
+        const isDashboard = sectionId === 'dashboard';
+        dashboardSection.classList.toggle('hidden', !isDashboard);
+        resourceSection.classList.toggle('hidden', isDashboard);
+        pageTitle.textContent = item ? item.querySelector('.text').textContent : 'Dashboard';
+        hideAlert(dashboardAlert);
+        hideAlert(resourceAlert);
+        if (isDashboard) {
+          loadDashboardData();
+          return;
+        }
+
+        resourceTitle.textContent = item.querySelector('.text').textContent;
         try {
-          await apiRequest(item.dataset.api, { method: 'GET' });
-          showAlert(dashboardAlert, `${item.querySelector('.text').textContent} loaded successfully.`, 'success');
+          const data = await apiRequest(item.dataset.api, { method: 'GET' });
+          renderResource(data);
         } catch (error) {
-          showAlert(dashboardAlert, error.message, 'error');
+          showAlert(resourceAlert, error.message, 'error');
           if (error.message.includes('Authentication required')) {
             showLogin();
           }
@@ -352,7 +410,7 @@
       }
 
       navItems.forEach(item => {
-        item.addEventListener('click', () => loadAdminResource(item));
+        item.addEventListener('click', () => showSection(item.dataset.section, item));
       });
 
       actionButtons.forEach(button => {
@@ -362,11 +420,17 @@
             : action.includes('Announcement') ? '/api/admin/announcements'
               : action.includes('Image') ? '/api/admin/media'
                 : '/api/admin/login-requests';
+          dashboardSection.classList.add('hidden');
+          resourceSection.classList.remove('hidden');
+          pageTitle.textContent = action;
+          resourceTitle.textContent = action;
+          hideAlert(dashboardAlert);
+          hideAlert(resourceAlert);
           try {
-            await apiRequest(resource, { method: 'GET' });
-            showAlert(dashboardAlert, `${action} data loaded successfully.`, 'success');
+            const data = await apiRequest(resource, { method: 'GET' });
+            renderResource(data);
           } catch (error) {
-            showAlert(dashboardAlert, error.message, 'error');
+            showAlert(resourceAlert, error.message, 'error');
             if (error.message.includes('Authentication required')) {
               showLogin();
             }
