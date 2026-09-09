@@ -1,40 +1,56 @@
+import logging
 import os
+import re
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
-import re
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / 'frontend'
 IMAGES_DIR = ROOT_DIR / 'images'
-DB_PATH = ROOT_DIR / 'backend' / 'tbjzc_cms.db'
 
 IS_VERCEL = os.environ.get('VERCEL') == '1'
 if IS_VERCEL:
+    DATA_DIR = Path('/tmp')
     FEEDBACK_DIR = Path('/tmp/feedback')
 else:
+    DATA_DIR = ROOT_DIR / 'backend'
     FEEDBACK_DIR = ROOT_DIR / 'Feedback'
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / 'tbjzc_cms.db'
 
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
-app.secret_key = os.environ.get('FLASK_SECRET_KEY') or os.urandom(32).hex()
+secret_key = os.environ.get('FLASK_SECRET_KEY')
+if not secret_key:
+    logger.warning('FLASK_SECRET_KEY is missing; generating an ephemeral key for this runtime only.')
+    secret_key = os.urandom(32).hex()
+app.secret_key = secret_key
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = IS_VERCEL
+app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 
 
 def get_admin_credentials():
-    return (
-        os.environ.get('ADMIN_USERNAME') or 'admin',
-        os.environ.get('ADMIN_PASSWORD') or 'admin123',
-    )
+    username = os.environ.get('ADMIN_USERNAME')
+    password = os.environ.get('ADMIN_PASSWORD')
+    if not username or not password:
+        logger.warning('ADMIN_USERNAME or ADMIN_PASSWORD is missing; falling back to local-only development defaults.')
+        username = username or 'admin'
+        password = password or 'admin123'
+    return username, password
 
 
 def get_db():
@@ -342,7 +358,19 @@ def ensure_default_data():
     conn.close()
 
 
-ensure_default_data()
+try:
+    ensure_default_data()
+except Exception:
+    logger.exception('Database initialization failed during app startup.')
+    raise
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(error):
+    logger.exception('Unhandled application exception: %s', error)
+    if request.path.startswith('/api/'):
+        return jsonify(error='A server error occurred. Please try again later.'), 500
+    return error
 
 
 def fetch_school():
@@ -869,5 +897,5 @@ def admin_health_check():
     return jsonify(status='ok', db_path=str(DB_PATH))
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+application = app
+
