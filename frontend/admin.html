@@ -239,6 +239,44 @@
               </div>
             </div>
           </div>
+          <div class="sections-grid" style="margin-top:18px;">
+            <div id="pendingApprovalsPanel" class="card panel super-admin-only">
+              <div class="panel-header">
+                <h2 class="panel-title">Pending Approvals</h2>
+                <span id="pendingApprovalCount" class="trend-down">0</span>
+              </div>
+              <div id="pendingApprovalsList" class="activity-list"></div>
+            </div>
+            <div id="alertsPanel" class="card panel super-admin-only">
+              <div class="panel-header">
+                <h2 class="panel-title">Alerts</h2>
+                <span id="alertCount" class="trend-down">0</span>
+              </div>
+              <div id="alertsList" class="activity-list"></div>
+            </div>
+          </div>
+          <div class="sections-grid" style="margin-top:18px;">
+            <div class="card panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Recent Activities</h2>
+              </div>
+              <div id="recentActivitiesList" class="activity-list"></div>
+            </div>
+            <div id="createUserPanel" class="card panel super-admin-only">
+              <div class="panel-header">
+                <h2 class="panel-title">Create New User</h2>
+              </div>
+              <form id="createUserForm">
+                <div class="field"><label for="newUserName">Name</label><input id="newUserName" required maxlength="120" /></div>
+                <div class="field"><label for="newUserEmail">Email Address</label><input id="newUserEmail" type="email" required /></div>
+                <div class="field"><label for="newUserRole">Role</label><select id="newUserRole" required><option value="">Select a role</option><option>DEVELOPER</option><option>CYBER SECURITY</option><option>MAIN ADMIN</option><option>ADMIN</option></select></div>
+                <div class="field"><label for="newUserPassword">Password</label><input id="newUserPassword" type="password" minlength="8" required /></div>
+                <div class="field"><label for="newUserConfirmPassword">Confirm Password</label><input id="newUserConfirmPassword" type="password" minlength="8" required /></div>
+                <div id="createUserAlert" class="alert"></div>
+                <button class="primary-btn" type="submit">Create New User</button>
+              </form>
+            </div>
+          </div>
           </div>
           <div id="resourceSection" class="admin-section hidden">
             <div id="resourceAlert" class="alert"></div>
@@ -274,6 +312,16 @@
       const resourceAlert = document.getElementById('resourceAlert');
       const resourceTitle = document.getElementById('resourceTitle');
       const resourceContent = document.getElementById('resourceContent');
+      const pendingPanel = document.getElementById('pendingApprovalsPanel');
+      const alertsPanel = document.getElementById('alertsPanel');
+      const createUserPanel = document.getElementById('createUserPanel');
+      const pendingApprovalsList = document.getElementById('pendingApprovalsList');
+      const recentActivitiesList = document.getElementById('recentActivitiesList');
+      const alertsList = document.getElementById('alertsList');
+      const pendingApprovalCount = document.getElementById('pendingApprovalCount');
+      const alertCount = document.getElementById('alertCount');
+      const createUserForm = document.getElementById('createUserForm');
+      const createUserAlert = document.getElementById('createUserAlert');
       let authenticatedAdmin = null;
       let sessionCheckPromise = null;
 
@@ -367,6 +415,125 @@
           .replaceAll("'", '&#039;');
       }
 
+      function renderRecentActivities(items) {
+        if (!items.length) {
+          recentActivitiesList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No recent activities.</div></div></div>';
+          return;
+        }
+        recentActivitiesList.innerHTML = items.map(item => `
+          <div class="activity-item">
+            <span class="dot"></span>
+            <div class="activity-meta">
+              <div class="activity-name">${escapeHtml(item.actor_name || item.actor_email || 'System')}</div>
+              <div class="activity-time">${escapeHtml(item.details || item.action)} · ${escapeHtml(item.created_at)}${item.device_info ? ` · ${escapeHtml(item.device_info)}` : ''}</div>
+            </div>
+            <span class="trend-up">${escapeHtml(item.result || 'success')}</span>
+          </div>`).join('');
+      }
+
+      function renderPendingApprovals(items) {
+        pendingApprovalCount.textContent = String(items.length);
+        if (!items.length) {
+          pendingApprovalsList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No pending approvals.</div></div></div>';
+          return;
+        }
+        pendingApprovalsList.innerHTML = items.map(item => `
+          <div class="activity-item" data-approval-id="${escapeHtml(item.id)}">
+            <div class="activity-meta">
+              <div class="activity-name">${escapeHtml(item.name)}</div>
+              <div class="activity-time">${escapeHtml(item.email)} · ${escapeHtml(item.requested_role || 'Role not specified')} · ${escapeHtml(item.created_at)} · ${escapeHtml(item.device_info || 'Device unavailable')}</div>
+            </div>
+            <button class="mini-btn approval-allow" data-id="${escapeHtml(item.id)}">Allow</button>
+            <button class="danger-btn approval-deny" data-id="${escapeHtml(item.id)}">Deny</button>
+          </div>`).join('');
+      }
+
+      function renderSecurityAlerts(items) {
+        alertCount.textContent = String(items.filter(item => !item.is_read).length);
+        if (!items.length) {
+          alertsList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No security alerts.</div></div></div>';
+          return;
+        }
+        alertsList.innerHTML = items.map(item => `
+          <div class="activity-item">
+            <div class="activity-meta">
+              <div class="activity-name">${escapeHtml(item.alert_type)} · ${escapeHtml(item.severity)}</div>
+              <div class="activity-time">${escapeHtml(item.description)} · ${escapeHtml(item.module)} · ${escapeHtml(item.created_at)} · ${escapeHtml(item.device_info || 'Device unavailable')}</div>
+            </div>
+            ${item.is_read ? '' : `<button class="mini-btn alert-read" data-id="${escapeHtml(item.id)}">Mark read</button>`}
+          </div>`).join('');
+      }
+
+      async function loadDashboardPanels() {
+        const isSuperAdmin = authenticatedAdmin?.role === 'SUPER_ADMIN';
+        [pendingPanel, alertsPanel, createUserPanel].forEach(panel => panel.classList.toggle('hidden', !isSuperAdmin));
+        const activityResponse = await apiRequest('/api/admin/recent-activity');
+        renderRecentActivities(activityResponse);
+        if (!isSuperAdmin) {
+          return;
+        }
+        const [pending, alerts] = await Promise.all([
+          apiRequest('/api/admin/pending-approvals'),
+          apiRequest('/api/admin/alerts')
+        ]);
+        renderPendingApprovals(pending);
+        renderSecurityAlerts(alerts);
+      }
+
+      async function reviewPendingApproval(requestId, action) {
+        try {
+          await apiRequest(`/api/admin/login-requests/${requestId}/${action}`, { method: 'POST' });
+          await loadDashboardPanels();
+        } catch (error) {
+          showAlert(dashboardAlert, error.message, 'error');
+        }
+      }
+
+      pendingApprovalsList.addEventListener('click', event => {
+        const button = event.target.closest('button[data-id]');
+        if (!button) return;
+        reviewPendingApproval(button.dataset.id, button.classList.contains('approval-allow') ? 'approve' : 'deny');
+      });
+
+      alertsList.addEventListener('click', async event => {
+        const button = event.target.closest('.alert-read');
+        if (!button) return;
+        try {
+          await apiRequest(`/api/admin/alerts/${button.dataset.id}/read`, { method: 'POST' });
+          await loadDashboardPanels();
+        } catch (error) {
+          showAlert(dashboardAlert, error.message, 'error');
+        }
+      });
+
+      createUserForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        hideAlert(createUserAlert);
+        const password = document.getElementById('newUserPassword').value;
+        const confirmPassword = document.getElementById('newUserConfirmPassword').value;
+        if (password !== confirmPassword) {
+          showAlert(createUserAlert, 'Passwords must match.', 'error');
+          return;
+        }
+        try {
+          await apiRequest('/api/admin/users', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: document.getElementById('newUserName').value.trim(),
+              email: document.getElementById('newUserEmail').value.trim(),
+              role: document.getElementById('newUserRole').value,
+              password,
+              confirm_password: confirmPassword
+            })
+          });
+          createUserForm.reset();
+          showAlert(createUserAlert, 'User created successfully.', 'success');
+          await loadDashboardPanels();
+        } catch (error) {
+          showAlert(createUserAlert, error.message, 'error');
+        }
+      });
+
       function renderResource(data) {
         const rows = Array.isArray(data) ? data : [data];
         if (!rows.length || (rows.length === 1 && !Object.keys(rows[0] || {}).length)) {
@@ -449,6 +616,7 @@
           const activityList = document.getElementById('activityList');
           if (!summary.recent_activity || !summary.recent_activity.length) {
             activityList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No recent activity</div></div></div>';
+            await loadDashboardPanels();
             return;
           }
 
@@ -456,12 +624,13 @@
             <div class="activity-item">
               <span class="dot"></span>
               <div class="activity-meta">
-                <div class="activity-name">${item.name}</div>
-                <div class="activity-time">${item.type} • ${item.created_at || 'Today'}</div>
+                <div class="activity-name">${escapeHtml(item.actor_name || item.actor_email || 'System')}</div>
+                <div class="activity-time">${escapeHtml(item.details || item.action || 'Activity')} · ${escapeHtml(item.created_at || 'Today')}</div>
               </div>
-              <span class="trend-up">${item.status || 'Done'}</span>
+              <span class="trend-up">${escapeHtml(item.result || 'Done')}</span>
             </div>
           `).join('');
+          await loadDashboardPanels();
         } catch (error) {
           showAlert(dashboardAlert, 'Unable to load dashboard data.', 'error');
         }
