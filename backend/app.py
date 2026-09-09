@@ -43,13 +43,17 @@ app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 
 
+def normalize_env_value(value):
+    if value is None:
+        return ''
+    return value.strip().strip('"').strip("'")
+
+
 def get_admin_credentials():
-    username = os.environ.get('ADMIN_USERNAME')
-    password = os.environ.get('ADMIN_PASSWORD')
-    if not username or not password:
-        logger.warning('ADMIN_USERNAME or ADMIN_PASSWORD is missing; falling back to local-only development defaults.')
-        username = username or 'admin'
-        password = password or 'admin123'
+    username = normalize_env_value(os.environ.get('ADMIN_USERNAME'))
+    password = normalize_env_value(os.environ.get('ADMIN_PASSWORD'))
+    logger.info('ADMIN_USERNAME configured: %s', bool(username))
+    logger.info('ADMIN_PASSWORD configured: %s', bool(password))
     return username, password
 
 
@@ -280,9 +284,9 @@ def ensure_default_data():
         '''
     )
 
+    admin_username, admin_password = get_admin_credentials()
     admin_count = conn.execute('SELECT COUNT(*) FROM admins').fetchone()[0]
-    if admin_count == 0:
-        admin_username, admin_password = get_admin_credentials()
+    if admin_count == 0 and admin_username and admin_password:
         conn.execute(
             'INSERT INTO admins (username, email, full_name, password_hash, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (
@@ -295,6 +299,29 @@ def ensure_default_data():
                 iso_now(),
             ),
         )
+    elif admin_username and admin_password:
+        default_admin = conn.execute('SELECT * FROM admins ORDER BY id LIMIT 1').fetchone()
+        if default_admin:
+            normalized_email = f'{admin_username}@tbjzc.com'
+            stored_hash = default_admin['password_hash']
+            should_update = (
+                default_admin['username'] != admin_username
+                or default_admin['email'] != normalized_email
+                or not check_password_hash(stored_hash, admin_password)
+            )
+            if should_update:
+                conn.execute(
+                    'UPDATE admins SET username = ?, email = ?, password_hash = ?, full_name = ?, role = ?, status = ? WHERE id = ?',
+                    (
+                        admin_username,
+                        normalized_email,
+                        generate_password_hash(admin_password),
+                        'Super Administrator',
+                        'SUPER_ADMIN',
+                        'active',
+                        default_admin['id'],
+                    ),
+                )
 
     school_count = conn.execute('SELECT COUNT(*) FROM school').fetchone()[0]
     if school_count == 0:
@@ -501,20 +528,56 @@ def search():
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     payload = request.get_json(silent=True) or {}
-    username = (payload.get('username') or '').strip()
-    password = payload.get('password') or ''
+    username = normalize_env_value(payload.get('username'))
+    password = normalize_env_value(payload.get('password'))
+    env_username, env_password = get_admin_credentials()
+
     if not username or not password:
         return jsonify(error='Username and password are required.'), 400
+
+    if not env_username or not env_password:
+        logger.warning('Admin login blocked because ADMIN_USERNAME/ADMIN_PASSWORD are not configured.')
+        return jsonify(error='Admin credentials are not configured for this deployment.'), 500
+
+    if username != env_username or password != env_password:
+        return jsonify(error='Invalid username or password.'), 401
 
     conn = get_db()
     admin = conn.execute(
         'SELECT * FROM admins WHERE username = ? OR email = ?',
-        (username, username),
+        (env_username, env_username),
     ).fetchone()
+    if not admin:
+        conn.execute(
+            'INSERT INTO admins (username, email, full_name, password_hash, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (
+                env_username,
+                f'{env_username}@tbjzc.com',
+                'Super Administrator',
+                generate_password_hash(env_password),
+                'SUPER_ADMIN',
+                'active',
+                iso_now(),
+            ),
+        )
+        conn.commit()
+        admin = conn.execute('SELECT * FROM admins WHERE username = ?', (env_username,)).fetchone()
+    elif admin['username'] != env_username or not check_password_hash(admin['password_hash'], env_password):
+        conn.execute(
+            'UPDATE admins SET username = ?, email = ?, password_hash = ?, full_name = ?, role = ?, status = ? WHERE id = ?',
+            (
+                env_username,
+                f'{env_username}@tbjzc.com',
+                generate_password_hash(env_password),
+                'Super Administrator',
+                'SUPER_ADMIN',
+                'active',
+                admin['id'],
+            ),
+        )
+        conn.commit()
+        admin = conn.execute('SELECT * FROM admins WHERE id = ?', (admin['id'],)).fetchone()
     conn.close()
-
-    if not admin or not check_password_hash(admin['password_hash'], password):
-        return jsonify(error='Invalid username or password.'), 401
 
     if admin['status'] != 'active':
         return jsonify(error='This account is not active.'), 403
