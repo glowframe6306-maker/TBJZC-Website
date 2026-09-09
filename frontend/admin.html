@@ -265,22 +265,32 @@
         element.className = 'alert';
       }
 
+      const API_BASE = window.location.origin;
+
       async function apiRequest(url, options = {}) {
-        const response = await fetch(url, {
-          headers: { 'Content-Type': 'application/json' },
-          ...options
-        });
+        const requestUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+        let response;
+        try {
+          response = await fetch(requestUrl, {
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            ...options
+          });
+        } catch (error) {
+          throw new Error('Unable to reach the admin API. Please check the deployed backend and try again.');
+        }
+
         const contentType = response.headers.get('content-type') || '';
-        const data = contentType.includes('application/json') ? await response.json() : {};
+        const data = contentType.includes('application/json') ? await response.json() : { message: await response.text() };
         if (!response.ok) {
-          throw new Error(data.error || 'Request failed.');
+          throw new Error(data.error || data.message || 'Request failed.');
         }
         return data;
       }
 
       async function initSession() {
         try {
-          const session = await apiRequest('/api/admin/session', { method: 'GET' });
+          const session = await apiRequest('/api/admin/me', { method: 'GET' });
           if (session.logged_in) {
             enterDashboard(session.admin);
           } else {
@@ -288,6 +298,7 @@
           }
         } catch (error) {
           showLogin();
+          showAlert(loginAlert, error.message, 'error');
         }
       }
 

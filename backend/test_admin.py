@@ -23,6 +23,10 @@ class AdminAuthTests(unittest.TestCase):
         })
         self.assertEqual(login.status_code, 200, login.get_data(as_text=True))
 
+        me = self.client.get('/api/admin/me')
+        self.assertEqual(me.status_code, 200)
+        self.assertTrue(me.get_json()['logged_in'])
+
         response = self.client.get('/api/admin/dashboard/summary')
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()

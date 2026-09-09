@@ -23,10 +23,18 @@ else:
 FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'tbjzc-admin-secret-change-me')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or os.urandom(32).hex()
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = IS_VERCEL
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+
+
+def get_admin_credentials():
+    return (
+        os.environ.get('ADMIN_USERNAME') or 'admin',
+        os.environ.get('ADMIN_PASSWORD') or 'admin123',
+    )
 
 
 def get_db():
@@ -258,13 +266,14 @@ def ensure_default_data():
 
     admin_count = conn.execute('SELECT COUNT(*) FROM admins').fetchone()[0]
     if admin_count == 0:
+        admin_username, admin_password = get_admin_credentials()
         conn.execute(
             'INSERT INTO admins (username, email, full_name, password_hash, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (
-                'admin',
-                'admin@tbjzc.com',
+                admin_username,
+                f'{admin_username}@tbjzc.com',
                 'Super Administrator',
-                generate_password_hash('admin123'),
+                generate_password_hash(admin_password),
                 'SUPER_ADMIN',
                 'active',
                 iso_now(),
@@ -513,12 +522,17 @@ def admin_logout():
     return jsonify(message='Logged out successfully.')
 
 
-@app.route('/api/admin/session')
-def admin_session():
+@app.route('/api/admin/me', methods=['GET'])
+def admin_me():
     if not ensure_session_valid():
-        return jsonify(logged_in=False), 200
+        return jsonify(logged_in=False), 401
     admin = current_admin_record()
     return jsonify({'logged_in': True, 'admin': session.get('admin', admin)})
+
+
+@app.route('/api/admin/session')
+def admin_session():
+    return admin_me()
 
 
 @app.route('/api/admin/dashboard/summary')
