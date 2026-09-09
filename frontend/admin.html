@@ -155,15 +155,15 @@
         <div class="nav-section">
           <div class="nav-label">Navigation</div>
           <ul class="nav-list">
-            <li class="nav-item active"><span class="icon">▣</span><span class="text">Dashboard</span><span class="bullet"></span></li>
-            <li class="nav-item"><span class="icon">✎</span><span class="text">New Post</span></li>
-            <li class="nav-item"><span class="icon">📰</span><span class="text">Posts</span></li>
-            <li class="nav-item"><span class="icon">📣</span><span class="text">Announcements</span></li>
-            <li class="nav-item"><span class="icon">🖼️</span><span class="text">Media Library</span></li>
-            <li class="nav-item"><span class="icon">🏫</span><span class="text">School Details</span></li>
-            <li class="nav-item"><span class="icon">👥</span><span class="text">Users</span></li>
-            <li class="nav-item"><span class="icon">💬</span><span class="text">Messages</span></li>
-            <li class="nav-item"><span class="icon">⚙️</span><span class="text">Settings</span></li>
+            <li class="nav-item active" data-api="/api/admin/dashboard/summary"><span class="icon">▣</span><span class="text">Dashboard</span><span class="bullet"></span></li>
+            <li class="nav-item" data-api="/api/admin/posts"><span class="icon">✎</span><span class="text">New Post</span></li>
+            <li class="nav-item" data-api="/api/admin/posts"><span class="icon">📰</span><span class="text">Posts</span></li>
+            <li class="nav-item" data-api="/api/admin/announcements"><span class="icon">📣</span><span class="text">Announcements</span></li>
+            <li class="nav-item" data-api="/api/admin/media"><span class="icon">🖼️</span><span class="text">Media Library</span></li>
+            <li class="nav-item" data-api="/api/admin/school"><span class="icon">🏫</span><span class="text">School Details</span></li>
+            <li class="nav-item" data-api="/api/admin/users"><span class="icon">👥</span><span class="text">Users</span></li>
+            <li class="nav-item" data-api="/api/admin/messages"><span class="icon">💬</span><span class="text">Messages</span></li>
+            <li class="nav-item" data-api="/api/admin/settings"><span class="icon">⚙️</span><span class="text">Settings</span></li>
           </ul>
         </div>
 
@@ -255,6 +255,10 @@
       const adminName = document.getElementById('adminName');
       const adminRole = document.getElementById('adminRole');
       const userAvatar = document.getElementById('userAvatar');
+      const navItems = [...document.querySelectorAll('.nav-item')];
+      const actionButtons = [...document.querySelectorAll('.action-btn')];
+      let authenticatedAdmin = null;
+      let sessionCheckPromise = null;
 
       function showAlert(element, text, type = 'success') {
         element.textContent = text;
@@ -289,25 +293,43 @@
       }
 
       async function initSession() {
+        if (sessionCheckPromise) {
+          return sessionCheckPromise;
+        }
+        sessionCheckPromise = (async () => {
         try {
           const session = await apiRequest('/api/admin/me', { method: 'GET' });
-          if (session.logged_in) {
-            enterDashboard(session.admin);
-          } else {
+          if (!session.logged_in || !session.admin) {
             showLogin();
+            return false;
           }
+          enterDashboard(session.admin);
+          return true;
         } catch (error) {
           showLogin();
-          showAlert(loginAlert, error.message, 'error');
+          if (!error.message.includes('Authentication required')) {
+            showAlert(loginAlert, error.message, 'error');
+          }
+          return false;
+        }
+        })();
+        try {
+          return await sessionCheckPromise;
+        } finally {
+          sessionCheckPromise = null;
         }
       }
 
       function showLogin() {
+        authenticatedAdmin = null;
         loginScreen.classList.remove('hidden');
         appShell.classList.add('hidden');
       }
 
       function enterDashboard(admin) {
+        authenticatedAdmin = admin;
+        hideAlert(loginAlert);
+        hideAlert(dashboardAlert);
         loginScreen.classList.add('hidden');
         appShell.classList.remove('hidden');
         adminName.textContent = admin.full_name || admin.username || 'Admin';
@@ -315,6 +337,42 @@
         userAvatar.textContent = (admin.full_name || admin.username || 'A').charAt(0).toUpperCase();
         loadDashboardData();
       }
+
+      async function loadAdminResource(item) {
+        navItems.forEach(navItem => navItem.classList.toggle('active', navItem === item));
+        try {
+          await apiRequest(item.dataset.api, { method: 'GET' });
+          showAlert(dashboardAlert, `${item.querySelector('.text').textContent} loaded successfully.`, 'success');
+        } catch (error) {
+          showAlert(dashboardAlert, error.message, 'error');
+          if (error.message.includes('Authentication required')) {
+            showLogin();
+          }
+        }
+      }
+
+      navItems.forEach(item => {
+        item.addEventListener('click', () => loadAdminResource(item));
+      });
+
+      actionButtons.forEach(button => {
+        button.addEventListener('click', async () => {
+          const action = button.textContent.trim();
+          const resource = action.includes('Post') ? '/api/admin/posts'
+            : action.includes('Announcement') ? '/api/admin/announcements'
+              : action.includes('Image') ? '/api/admin/media'
+                : '/api/admin/login-requests';
+          try {
+            await apiRequest(resource, { method: 'GET' });
+            showAlert(dashboardAlert, `${action} data loaded successfully.`, 'success');
+          } catch (error) {
+            showAlert(dashboardAlert, error.message, 'error');
+            if (error.message.includes('Authentication required')) {
+              showLogin();
+            }
+          }
+        });
+      });
 
       async function loadDashboardData() {
         try {
@@ -361,7 +419,14 @@
             method: 'POST',
             body: JSON.stringify({ username, password, remember_me: rememberMe.checked })
           });
-          enterDashboard(result.admin);
+          if (!result.admin) {
+            throw new Error('Login succeeded but no admin session was returned.');
+          }
+          const authenticatedSession = await apiRequest('/api/admin/me', { method: 'GET' });
+          if (!authenticatedSession.logged_in || !authenticatedSession.admin) {
+            throw new Error('Login succeeded but the authenticated session could not be verified.');
+          }
+          enterDashboard(authenticatedSession.admin);
         } catch (error) {
           showAlert(loginAlert, error.message, 'error');
         } finally {
