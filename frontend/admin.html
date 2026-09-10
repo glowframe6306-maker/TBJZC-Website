@@ -152,6 +152,7 @@
           <div class="nav-label">Navigation</div>
           <ul class="nav-list">
             <li class="nav-item active" data-section="dashboard"><span class="icon">▣</span><span class="text">Dashboard</span><span class="bullet"></span></li>
+            <li class="nav-item" data-section="new-post"><span class="icon">✎</span><span class="text">NEW POST</span></li>
             <li class="nav-item" data-section="posts" data-api="/api/admin/posts"><span class="icon">✎</span><span class="text">New Post</span></li>
             <li class="nav-item" data-section="posts" data-api="/api/admin/posts"><span class="icon">📰</span><span class="text">Posts</span></li>
             <li class="nav-item" data-section="announcements" data-api="/api/admin/announcements"><span class="icon">📣</span><span class="text">Announcements</span></li>
@@ -675,7 +676,7 @@
           return;
         }
 
-        if (sectionId === 'posts') {
+        if (sectionId === 'posts' || sectionId === 'new-post') {
           resourceSection.classList.remove('hidden');
           await showPostWorkspace();
           return;
