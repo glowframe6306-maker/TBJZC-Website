@@ -87,6 +87,7 @@
       imageElement.src = resolveImageUrl(image);
       imageElement.alt = `Gallery image ${index + 1}`;
       imageElement.loading = 'lazy';
+      imageElement.addEventListener('error', () => console.error('Post gallery image failed to load:', imageElement.src));
       button.appendChild(imageElement);
       galleryGrid.appendChild(button);
     });
@@ -157,6 +158,7 @@
         imageElement.src = resolveImageUrl(image);
         imageElement.alt = post.title || 'Published post image';
         imageElement.loading = 'eager';
+        imageElement.addEventListener('error', () => console.error('Published post image failed to load:', imageElement.src));
         button.appendChild(imageElement);
         if (index === 3 && images.length > 4) {
           const more = document.createElement('span');

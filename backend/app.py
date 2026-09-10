@@ -4,6 +4,8 @@ import os
 import re
 import sqlite3
 import uuid
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -46,6 +48,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / 'tbjzc_cms.db'
 UPLOADS_DIR = DATA_DIR / 'uploads' if IS_VERCEL else IMAGES_DIR / 'uploads'
+BLOB_READ_WRITE_TOKEN = os.environ.get('BLOB_READ_WRITE_TOKEN', '').strip()
 
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
 secret_key = os.environ.get('FLASK_SECRET_KEY')
@@ -149,11 +152,46 @@ def save_post_images(files):
             if extension not in allowed_extensions or not (uploaded.mimetype or '').startswith('image/'):
                 raise ValueError('Only JPG, PNG, GIF, and WEBP images are allowed.')
             stored_name = f'{uuid.uuid4().hex}{extension}'
-            destination = upload_dir / stored_name
-            uploaded.save(destination)
-            if destination.stat().st_size > 4 * 1024 * 1024:
+            image_bytes = uploaded.stream.read(4 * 1024 * 1024 + 1)
+            if len(image_bytes) > 4 * 1024 * 1024:
                 raise ValueError('Each image must be 4 MB or smaller.')
-            saved.append(f'/api/uploads/{stored_name}' if IS_VERCEL else f'/images/uploads/{stored_name}')
+            if not image_bytes:
+                raise ValueError('Uploaded image is empty.')
+            if IS_VERCEL:
+                if not BLOB_READ_WRITE_TOKEN:
+                    raise ValueError('Persistent image storage is not configured. Set BLOB_READ_WRITE_TOKEN in Vercel.')
+                blob_request = urllib.request.Request(
+                    f'https://blob.vercel-storage.com/post-images/{stored_name}',
+                    data=image_bytes,
+                    method='PUT',
+                    headers={
+                        'Authorization': f'Bearer {BLOB_READ_WRITE_TOKEN}',
+                        'x-api-version': '7',
+                        'x-content-type': uploaded.mimetype or 'application/octet-stream',
+                        'x-add-random-suffix': '0',
+                    },
+                )
+                try:
+                    with urllib.request.urlopen(blob_request, timeout=30) as response:
+                        blob_payload = json.loads(response.read().decode('utf-8'))
+                except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as error:
+                    raise ValueError(f'Persistent image storage upload failed: {error}') from error
+                image_url = blob_payload.get('url')
+                if not image_url:
+                    raise ValueError('Persistent image storage returned no image URL.')
+                try:
+                    verify_request = urllib.request.Request(image_url, method='HEAD')
+                    with urllib.request.urlopen(verify_request, timeout=15):
+                        pass
+                except (urllib.error.HTTPError, urllib.error.URLError) as error:
+                    raise ValueError(f'Uploaded image could not be retrieved from persistent storage: {error}') from error
+                saved.append(image_url)
+            else:
+                destination = upload_dir / stored_name
+                destination.write_bytes(image_bytes)
+                if not destination.is_file():
+                    raise ValueError('Uploaded image was not saved to storage.')
+                saved.append(f'/images/uploads/{stored_name}')
     except OSError as error:
         raise ValueError(f'Unable to store uploaded images: {error}') from error
     return saved
@@ -173,6 +211,15 @@ def serialize_post(row):
             for image in post['images']
         ]
     return post
+
+
+def is_stored_image_reference(image):
+    return (
+        isinstance(image, str)
+        and (image.startswith('/images/uploads/')
+             or image.startswith('/api/uploads/')
+             or image.startswith('https://') and '.blob.vercel-storage.com/' in image)
+    )
 
 
 def log_security_alert(alert_type, description, severity='medium', module=None, admin_id=None, account=None):
@@ -937,8 +984,7 @@ def manage_posts():
         elif isinstance(payload, dict):
             images = payload.get('images') or []
             if not isinstance(images, list) or any(
-                not isinstance(image, str)
-                or not (image.startswith('/images/uploads/') or image.startswith('/api/uploads/'))
+                not is_stored_image_reference(image)
                 for image in images
             ):
                 return jsonify(error='Post images must be stored image paths.'), 400
@@ -987,7 +1033,7 @@ def upload_post_image():
         return jsonify(error=str(error)), 400
     except OSError as error:
         return jsonify(error=f'Unable to store uploaded image: {error}'), 503
-    return jsonify(image=images[0]), 201
+    return jsonify(image=images[0], url=images[0]), 201
 
 
 def delete_unshared_post_images(image_urls, deleted_post_id):
@@ -1007,9 +1053,22 @@ def delete_unshared_post_images(image_urls, deleted_post_id):
     for image_url in image_urls:
         if image_url in remaining_images:
             continue
-        if not isinstance(image_url, str) or not image_url.startswith(('/images/uploads/', '/api/uploads/')):
+        if not isinstance(image_url, str):
             continue
-        (UPLOADS_DIR / Path(image_url).name).unlink(missing_ok=True)
+        if image_url.startswith(('https://', 'http://')):
+            if BLOB_READ_WRITE_TOKEN and '.blob.vercel-storage.com/' in image_url:
+                delete_request = urllib.request.Request(
+                    image_url,
+                    method='DELETE',
+                    headers={'Authorization': f'Bearer {BLOB_READ_WRITE_TOKEN}'},
+                )
+                try:
+                    urllib.request.urlopen(delete_request, timeout=30).close()
+                except (urllib.error.HTTPError, urllib.error.URLError):
+                    logger.exception('Unable to delete manually removed blob image: %s', image_url)
+            continue
+        if image_url.startswith(('/images/uploads/', '/api/uploads/')):
+            (UPLOADS_DIR / Path(image_url).name).unlink(missing_ok=True)
 
 
 @app.route('/api/admin/posts/<int:post_id>', methods=['PUT', 'DELETE'])
