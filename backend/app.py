@@ -4,8 +4,6 @@ import os
 import re
 import sqlite3
 import uuid
-import urllib.error
-import urllib.request
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -74,6 +72,33 @@ def normalize_env_value(value):
 
 def get_blob_read_write_token():
     return normalize_env_value(os.environ.get('BLOB_READ_WRITE_TOKEN'))
+
+
+def get_blob_client():
+    if not normalize_env_value(os.environ.get('BLOB_STORE_ID')) or not normalize_env_value(os.environ.get('VERCEL_OIDC_TOKEN')):
+        if not get_blob_read_write_token():
+            raise ValueError('Vercel Blob is not configured. Connect the Blob store to this Vercel project so BLOB_STORE_ID and VERCEL_OIDC_TOKEN are available.')
+    try:
+        from vercel.blob import BlobClient
+    except ImportError as error:
+        raise ValueError('Vercel Blob SDK is not installed in this deployment.') from error
+    return BlobClient()
+
+
+def blob_storage_configured():
+    return bool(
+        normalize_env_value(os.environ.get('BLOB_STORE_ID'))
+        and normalize_env_value(os.environ.get('VERCEL_OIDC_TOKEN'))
+    ) or bool(get_blob_read_write_token())
+
+
+def blob_result_url(blob):
+    url = getattr(blob, 'url', None)
+    if url:
+        return url
+    if isinstance(blob, dict):
+        return blob.get('url')
+    return None
 
 
 def get_admin_credentials():
@@ -161,34 +186,19 @@ def save_post_images(files):
             if not image_bytes:
                 raise ValueError('Uploaded image is empty.')
             if IS_VERCEL:
-                blob_token = get_blob_read_write_token()
-                if not blob_token:
-                    raise ValueError('Persistent image storage is not configured. Set BLOB_READ_WRITE_TOKEN in Vercel.')
-                blob_request = urllib.request.Request(
-                    f'https://blob.vercel-storage.com/post-images/{stored_name}',
-                    data=image_bytes,
-                    method='PUT',
-                    headers={
-                        'Authorization': f'Bearer {blob_token}',
-                        'x-api-version': '7',
-                        'x-content-type': uploaded.mimetype or 'application/octet-stream',
-                        'x-add-random-suffix': '0',
-                    },
-                )
                 try:
-                    with urllib.request.urlopen(blob_request, timeout=30) as response:
-                        blob_payload = json.loads(response.read().decode('utf-8'))
-                except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as error:
-                    raise ValueError(f'Persistent image storage upload failed: {error}') from error
-                image_url = blob_payload.get('url')
+                    blob = get_blob_client().put(
+                        f'post-images/{stored_name}',
+                        image_bytes,
+                        access='public',
+                        content_type=uploaded.mimetype or 'application/octet-stream',
+                        add_random_suffix=False,
+                    )
+                except Exception as error:
+                    raise ValueError(f'Persistent Vercel Blob upload failed: {error}') from error
+                image_url = blob_result_url(blob)
                 if not image_url:
                     raise ValueError('Persistent image storage returned no image URL.')
-                try:
-                    verify_request = urllib.request.Request(image_url, method='HEAD')
-                    with urllib.request.urlopen(verify_request, timeout=15):
-                        pass
-                except (urllib.error.HTTPError, urllib.error.URLError) as error:
-                    raise ValueError(f'Uploaded image could not be retrieved from persistent storage: {error}') from error
                 saved.append(image_url)
             else:
                 destination = upload_dir / stored_name
@@ -676,7 +686,7 @@ def health():
         status='ok',
         feedback_dir=str(FEEDBACK_DIR),
         is_vercel=IS_VERCEL,
-        blob_storage_configured=bool(get_blob_read_write_token()) if IS_VERCEL else None,
+        blob_storage_configured=blob_storage_configured() if IS_VERCEL else None,
     )
 
 
@@ -1065,16 +1075,10 @@ def delete_unshared_post_images(image_urls, deleted_post_id):
         if not isinstance(image_url, str):
             continue
         if image_url.startswith(('https://', 'http://')):
-            blob_token = get_blob_read_write_token()
-            if blob_token and '.blob.vercel-storage.com/' in image_url:
-                delete_request = urllib.request.Request(
-                    image_url,
-                    method='DELETE',
-                    headers={'Authorization': f'Bearer {blob_token}'},
-                )
+            if '.blob.vercel-storage.com/' in image_url:
                 try:
-                    urllib.request.urlopen(delete_request, timeout=30).close()
-                except (urllib.error.HTTPError, urllib.error.URLError):
+                    get_blob_client().delete(image_url)
+                except Exception:
                     logger.exception('Unable to delete manually removed blob image: %s', image_url)
             continue
         if image_url.startswith(('/images/uploads/', '/api/uploads/')):

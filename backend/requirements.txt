@@ -1,1 +1,2 @@
 Flask
+vercel==0.10.0

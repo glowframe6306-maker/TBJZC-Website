@@ -279,7 +279,7 @@ class AdminAuthTests(unittest.TestCase):
                 'photo': (io.BytesIO(b'not-a-real-image'), 'image.png'),
             }, content_type='multipart/form-data')
             self.assertEqual(response.status_code, 400)
-            self.assertIn('BLOB_READ_WRITE_TOKEN', response.get_json()['error'])
+            self.assertIn('Vercel Blob is not configured', response.get_json()['error'])
             app_module.IS_VERCEL = original_is_vercel
         finally:
             if previous_vercel is None:
