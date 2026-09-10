@@ -150,9 +150,9 @@ def save_post_images(files):
             stored_name = f'{uuid.uuid4().hex}{extension}'
             destination = upload_dir / stored_name
             uploaded.save(destination)
-            if destination.stat().st_size > 5 * 1024 * 1024:
+            if destination.stat().st_size > 4 * 1024 * 1024:
                 destination.unlink(missing_ok=True)
-                raise ValueError('Each image must be 5 MB or smaller.')
+                raise ValueError('Each image must be 4 MB or smaller.')
             saved.append(f'/api/uploads/{stored_name}' if IS_VERCEL else f'/images/uploads/{stored_name}')
     except OSError as error:
         for url in saved:
@@ -918,6 +918,8 @@ def manage_posts():
     if request.content_type and request.content_type.startswith('multipart/form-data'):
         payload = request.form
         uploaded_files = request.files.getlist('photos')
+        if len([file for file in uploaded_files if file and file.filename]) > 1:
+            return jsonify(error='Upload images one at a time through the post image upload endpoint.'), 400
     else:
         payload = request.get_json(silent=True) or {}
         uploaded_files = []
@@ -938,7 +940,11 @@ def manage_posts():
             images = save_post_images(uploaded_files)
         elif isinstance(payload, dict):
             images = payload.get('images') or []
-            if not isinstance(images, list) or any(not isinstance(image, str) or not image.startswith('/images/') for image in images):
+            if not isinstance(images, list) or any(
+                not isinstance(image, str)
+                or not (image.startswith('/images/uploads/') or image.startswith('/api/uploads/'))
+                for image in images
+            ):
                 return jsonify(error='Post images must be stored image paths.'), 400
     except ValueError as error:
         return jsonify(error=str(error)), 400
@@ -962,6 +968,21 @@ def manage_posts():
     conn.close()
     log_activity('create_post', target=f'post:{post_id}', details=f'Created post in {section}: {title}', admin_id=session['admin_id'])
     return jsonify(message='Post published successfully.', id=post_id, section=section, images=images), 201
+
+
+@app.route('/api/admin/post-images', methods=['POST'])
+@require_admin
+def upload_post_image():
+    uploaded = request.files.get('photo')
+    if not uploaded or not uploaded.filename:
+        return jsonify(error='An image file is required.'), 400
+    try:
+        images = save_post_images([uploaded])
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    except OSError as error:
+        return jsonify(error=f'Unable to store uploaded image: {error}'), 503
+    return jsonify(image=images[0]), 201
 
 
 @app.route('/api/admin/posts/<int:post_id>', methods=['PUT', 'DELETE'])

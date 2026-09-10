@@ -77,6 +77,21 @@
       .table-label { color: var(--muted); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }
       .table-value { margin-top: 4px; font-weight: 600; overflow-wrap: anywhere; }
       .approval-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .post-thumbnail-grid { display: grid; grid-template-columns: repeat(3, 72px); gap: 6px; flex-shrink: 0; }
+      .post-thumbnail { width: 72px; height: 72px; object-fit: contain; background: var(--panel-alt); border-radius: 8px; display: block; }
+      .post-more { width: 72px; height: 72px; border: 0; border-radius: 8px; background: rgba(15,23,42,.78); color: #fff; font-weight: 700; cursor: pointer; }
+      .gallery-overlay { position: fixed; inset: 0; z-index: 50; display: none; padding: 5vh 5vw; background: rgba(3,7,18,.94); overflow: auto; }
+      .gallery-overlay.show { display: block; }
+      .gallery-close { position: fixed; top: 18px; right: 24px; z-index: 51; border: 0; background: transparent; color: #fff; font-size: 2.2rem; cursor: pointer; }
+      .gallery-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; max-width: 1100px; margin: 0 auto; }
+      .gallery-grid button { border: 0; padding: 0; background: transparent; cursor: pointer; }
+      .gallery-grid img { width: 100%; height: 180px; object-fit: contain; background: rgba(255,255,255,.06); border-radius: 8px; }
+      .viewer-overlay { position: fixed; inset: 0; z-index: 60; display: none; place-items: center; background: rgba(0,0,0,.95); padding: 48px; }
+      .viewer-overlay.show { display: grid; }
+      .viewer-image { max-width: 92vw; max-height: 84vh; object-fit: contain; }
+      .viewer-close { position: fixed; top: 18px; right: 24px; border: 0; background: transparent; color: #fff; font-size: 2.2rem; cursor: pointer; }
+      .upload-status { color: var(--muted); font-size: .85rem; min-height: 1.2em; }
+      .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
       .hidden { display: none !important; }
       .alert { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: #ecfeff; color: #0f172a; margin-bottom: 18px; display: none; }
       .alert.show { display: block; }
@@ -240,6 +255,7 @@
                   <div class="field"><label for="postDescription">Describe About That</label><textarea id="postDescription" rows="7" required></textarea></div>
                   <div class="field"><label for="postPhotos">Upload Photos</label><input id="postPhotos" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple /></div>
                   <div id="postPreview" class="photos"></div>
+                  <div id="postUploadStatus" class="upload-status"></div>
                   <div id="postFormAlert" class="alert"></div>
                   <button class="primary-btn" type="submit">PUBLISH POST</button>
                 </form>
@@ -254,6 +270,14 @@
           </div>
         </div>
       </main>
+    </div>
+    <div id="adminGalleryOverlay" class="gallery-overlay" aria-hidden="true">
+      <button id="adminGalleryClose" class="gallery-close" type="button" aria-label="Close gallery">&times;</button>
+      <div id="adminGalleryGrid" class="gallery-grid"></div>
+    </div>
+    <div id="adminViewerOverlay" class="viewer-overlay" aria-hidden="true">
+      <button id="adminViewerClose" class="viewer-close" type="button" aria-label="Close image viewer">&times;</button>
+      <img id="adminViewerImage" class="viewer-image" alt="">
     </div>
 
     <script>
@@ -284,10 +308,16 @@
       const postSection = document.getElementById('postSection');
       const postPhotos = document.getElementById('postPhotos');
       const postPreview = document.getElementById('postPreview');
+      const postUploadStatus = document.getElementById('postUploadStatus');
       const recentPostsList = document.getElementById('recentPostsList');
       const postFormAlert = document.getElementById('postFormAlert');
       let selectedPostFiles = [];
+      let uploadedPostImages = [];
       let editingPostId = null;
+      const adminGalleryOverlay = document.getElementById('adminGalleryOverlay');
+      const adminGalleryGrid = document.getElementById('adminGalleryGrid');
+      const adminViewerOverlay = document.getElementById('adminViewerOverlay');
+      const adminViewerImage = document.getElementById('adminViewerImage');
       const pendingPanel = document.getElementById('pendingApprovalsPanel');
       const alertsPanel = document.getElementById('alertsPanel');
       const createUserPanel = document.getElementById('createUserPanel');
@@ -410,17 +440,67 @@
       function renderPostPreviews() {
         postPreview.innerHTML = selectedPostFiles.map((file, index) => `
           <div style="position:relative;">
-            <img src="${URL.createObjectURL(file)}" alt="Selected photo ${index + 1}" style="width:180px;max-height:140px;object-fit:contain;border-radius:8px;display:block;">
+            <img src="${URL.createObjectURL(file)}" alt="Selected photo ${index + 1}" style="width:100%;height:88px;object-fit:contain;background:var(--panel-alt);border-radius:8px;display:block;">
             <button type="button" class="danger-btn remove-post-photo" data-index="${index}" style="position:absolute;right:4px;top:4px;padding:4px 8px;">Remove</button>
           </div>`).join('');
       }
+
+      function openAdminGallery(images) {
+        adminGalleryGrid.innerHTML = images.map((image, index) => `
+          <button type="button" class="admin-gallery-image" data-image-index="${index}">
+            <img src="${escapeHtml(resolveImageUrl(image))}" alt="Gallery image ${index + 1}">
+          </button>`).join('');
+        adminGalleryGrid.dataset.images = JSON.stringify(images);
+        adminGalleryOverlay.classList.add('show');
+        adminGalleryOverlay.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeAdminGallery() {
+        adminGalleryOverlay.classList.remove('show');
+        adminGalleryOverlay.setAttribute('aria-hidden', 'true');
+      }
+
+      function openAdminViewer(image) {
+        adminViewerImage.src = resolveImageUrl(image);
+        adminViewerOverlay.classList.add('show');
+        adminViewerOverlay.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeAdminViewer() {
+        adminViewerOverlay.classList.remove('show');
+        adminViewerOverlay.setAttribute('aria-hidden', 'true');
+        adminViewerImage.removeAttribute('src');
+      }
+
+      adminGalleryGrid.addEventListener('click', event => {
+        const imageButton = event.target.closest('.admin-gallery-image');
+        if (!imageButton) return;
+        const images = JSON.parse(adminGalleryGrid.dataset.images || '[]');
+        openAdminViewer(images[Number(imageButton.dataset.imageIndex)]);
+      });
+      document.getElementById('adminGalleryClose').addEventListener('click', closeAdminGallery);
+      document.getElementById('adminViewerClose').addEventListener('click', closeAdminViewer);
+      adminGalleryOverlay.addEventListener('click', event => {
+        if (event.target === adminGalleryOverlay) closeAdminGallery();
+      });
+      adminViewerOverlay.addEventListener('click', event => {
+        if (event.target === adminViewerOverlay) closeAdminViewer();
+      });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+          closeAdminViewer();
+          closeAdminGallery();
+        }
+      });
 
       function resetPostForm() {
         editingPostId = null;
         postForm.reset();
         selectedPostFiles = [];
+        uploadedPostImages = [];
         postPhotos.value = '';
         postPreview.innerHTML = '';
+        postUploadStatus.textContent = '';
         postFormPanel.classList.add('hidden');
         hideAlert(postFormAlert);
       }
@@ -431,10 +511,12 @@
           return;
         }
         recentPostsList.innerHTML = posts.map(post => {
-          const image = (post.images || [])[0];
-          const imageUrl = resolveImageUrl(image);
+          const images = post.images || [];
+          const visibleImages = images.slice(0, 3);
+          const remaining = images.length - visibleImages.length;
+          const thumbnails = visibleImages.map((image, index) => `<button class="post-gallery-trigger" data-images="${escapeHtml(JSON.stringify(images))}" type="button"><img class="post-thumbnail" src="${escapeHtml(resolveImageUrl(image))}" alt="${escapeHtml(post.title)} image ${index + 1}"></button>`).join('');
           return `<div class="activity-item">
-            ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:110px;max-height:110px;object-fit:contain;border-radius:8px;">` : ''}
+            ${images.length ? `<div class="post-thumbnail-grid">${thumbnails}${remaining > 0 ? `<button class="post-more post-gallery-trigger" data-images="${escapeHtml(JSON.stringify(images))}" type="button">+${remaining}</button>` : ''}</div>` : ''}
             <div class="activity-meta">
               <div class="activity-name">${escapeHtml(post.title)}</div>
               <div class="activity-time">${escapeHtml((post.section || post.category || 'Unassigned').toUpperCase())} · ${escapeHtml(post.short_description || '')} · Published: ${escapeHtml(post.publish_date || post.created_at || '')} · By: ${escapeHtml(post.author || '')}</div>
@@ -460,14 +542,17 @@
       }
 
       postPhotos.addEventListener('change', () => {
-        selectedPostFiles = [...postPhotos.files].slice(0, 10);
+        selectedPostFiles = [...postPhotos.files];
+        uploadedPostImages = [];
         renderPostPreviews();
       });
 
       postPreview.addEventListener('click', event => {
         const button = event.target.closest('.remove-post-photo');
         if (!button) return;
-        selectedPostFiles.splice(Number(button.dataset.index), 1);
+        const removedIndex = Number(button.dataset.index);
+        selectedPostFiles.splice(removedIndex, 1);
+        uploadedPostImages.splice(removedIndex, 1);
         const transfer = new DataTransfer();
         selectedPostFiles.forEach(file => transfer.items.add(file));
         postPhotos.files = transfer.files;
@@ -480,6 +565,11 @@
       });
 
       recentPostsList.addEventListener('click', async event => {
+        const galleryButton = event.target.closest('.post-gallery-trigger');
+        if (galleryButton) {
+          openAdminGallery(JSON.parse(galleryButton.dataset.images));
+          return;
+        }
         const editButton = event.target.closest('.edit-post');
         const deleteButton = event.target.closest('.delete-post');
         if (deleteButton) {
@@ -518,17 +608,38 @@
               })
             });
           } else {
-            const formData = new FormData();
-            formData.append('section', postSection.value);
-            formData.append('title', document.getElementById('postHeading').value.trim());
-            formData.append('description', document.getElementById('postDescription').value.trim());
-            selectedPostFiles.forEach(file => formData.append('photos', file));
-            await apiRequest('/api/admin/posts', { method: 'POST', body: formData });
+            const images = [];
+            for (let index = 0; index < selectedPostFiles.length; index += 1) {
+              if (!uploadedPostImages[index]) {
+                if (selectedPostFiles[index].size > 4 * 1024 * 1024) {
+                  throw new Error(`${selectedPostFiles[index].name} is larger than 4 MB.`);
+                }
+                postUploadStatus.textContent = `Uploading ${index + 1} / ${selectedPostFiles.length}`;
+                const formData = new FormData();
+                formData.append('photo', selectedPostFiles[index]);
+                const result = await apiRequest('/api/admin/post-images', { method: 'POST', body: formData });
+                uploadedPostImages[index] = result.image;
+              }
+              images.push(uploadedPostImages[index]);
+            }
+            postUploadStatus.textContent = 'Saving post...';
+            await apiRequest('/api/admin/posts', {
+              method: 'POST',
+              body: JSON.stringify({
+                section: postSection.value,
+                title: document.getElementById('postHeading').value.trim(),
+                description: document.getElementById('postDescription').value.trim(),
+                images
+              })
+            });
           }
           showAlert(postFormAlert, editingPostId ? 'Post updated successfully.' : 'Post published successfully.', 'success');
           await refreshPostWorkspace();
           if (!editingPostId) resetPostForm();
         } catch (error) {
+          const failedIndex = selectedPostFiles.findIndex((file, index) => !uploadedPostImages[index]);
+          const failedFile = failedIndex >= 0 ? selectedPostFiles[failedIndex].name : 'post data';
+          postUploadStatus.textContent = `Upload failed for ${failedFile}. Fix it and retry.`;
           showAlert(postFormAlert, error.message, 'error');
         }
       });
