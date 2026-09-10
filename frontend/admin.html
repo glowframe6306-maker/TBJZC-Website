@@ -78,6 +78,8 @@
       .table-value { margin-top: 4px; font-weight: 600; overflow-wrap: anywhere; }
       .approval-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
       .post-thumbnail-grid { display: grid; grid-template-columns: repeat(3, 72px); gap: 6px; flex-shrink: 0; }
+      .post-thumbnail-grid.four-up { grid-template-columns: repeat(2, 72px); grid-template-rows: repeat(2, 72px); padding: 6px; background: var(--panel-alt); border-radius: 10px; }
+      .post-thumbnail-button { position: relative; border: 0; padding: 0; background: transparent; cursor: pointer; }
       .post-thumbnail { width: 72px; height: 72px; object-fit: contain; background: var(--panel-alt); border-radius: 8px; display: block; }
       .post-more { width: 72px; height: 72px; border: 0; border-radius: 8px; background: rgba(15,23,42,.78); color: #fff; font-weight: 700; cursor: pointer; }
       .gallery-overlay { position: fixed; inset: 0; z-index: 50; display: none; padding: 5vh 5vw; background: rgba(3,7,18,.94); overflow: auto; }
@@ -539,11 +541,12 @@
         }
         recentPostsList.innerHTML = posts.map(post => {
           const images = post.images || [];
-          const visibleImages = images.slice(0, 3);
+          const fourOrMore = images.length >= 4;
+          const visibleImages = images.slice(0, fourOrMore ? 4 : 3);
           const remaining = images.length - visibleImages.length;
-          const thumbnails = visibleImages.map((image, index) => `<button class="post-gallery-trigger" data-images="${escapeHtml(JSON.stringify(images))}" type="button"><img class="post-thumbnail" src="${escapeHtml(resolveImageUrl(image))}" alt="${escapeHtml(post.title)} image ${index + 1}"></button>`).join('');
+          const thumbnails = visibleImages.map((image, index) => `<button class="post-gallery-trigger post-thumbnail-button" data-images="${escapeHtml(JSON.stringify(images))}" type="button"><img class="post-thumbnail" src="${escapeHtml(resolveImageUrl(image))}" alt="${escapeHtml(post.title)} image ${index + 1}">${fourOrMore && index === 3 && remaining > 0 ? `<span class="published-post-gallery-more">+${remaining}</span>` : ''}</button>`).join('');
           return `<div class="activity-item">
-            ${images.length ? `<div class="post-thumbnail-grid">${thumbnails}${remaining > 0 ? `<button class="post-more post-gallery-trigger" data-images="${escapeHtml(JSON.stringify(images))}" type="button">+${remaining}</button>` : ''}</div>` : ''}
+            ${images.length ? `<div class="post-thumbnail-grid${fourOrMore ? ' four-up' : ''}">${thumbnails}</div>` : ''}
             <div class="activity-meta">
               <div class="activity-name">${escapeHtml(post.title)}</div>
               <div class="activity-time">${escapeHtml((post.section || post.category || 'Unassigned').toUpperCase())} · ${escapeHtml(post.short_description || '')} · Published: ${escapeHtml(post.publish_date || post.created_at || '')} · By: ${escapeHtml(post.author || '')}</div>

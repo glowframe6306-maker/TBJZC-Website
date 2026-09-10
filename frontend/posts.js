@@ -33,7 +33,11 @@
   const style = document.createElement('style');
   style.textContent = `
     .published-post-gallery-item { position: relative; border: 0; padding: 0; background: transparent; cursor: pointer; min-width: 0; }
+    .published-post-gallery { display: grid; gap: 8px; }
+    .published-post-gallery:not(.four-up) { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+    .published-post-gallery.four-up { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); padding: 8px; background: rgba(255,255,255,.04); border-radius: 12px; }
     .published-post-gallery-item img { width: 100%; height: 180px; object-fit: contain; background: rgba(255,255,255,.06); border-radius: 8px; display: block; }
+    .published-post-gallery.four-up .published-post-gallery-item img { height: clamp(120px, 24vw, 260px); }
     .published-post-gallery-more { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 8px; background: rgba(3,7,18,.68); color: #fff; font-size: 1.2rem; font-weight: 700; }
     .posts-gallery-overlay, .posts-viewer-overlay { position: fixed; inset: 0; z-index: 100; display: none; background: rgba(3,7,18,.95); padding: 6vh 5vw; overflow: auto; }
     .posts-gallery-overlay.show, .posts-viewer-overlay.show { display: block; }
@@ -48,7 +52,7 @@
     .posts-viewer-prev { left: 18px; }
     .posts-viewer-next { right: 18px; }
     .posts-viewer-counter { position: fixed; bottom: 18px; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; }
-    @media (max-width: 600px) { .published-post-gallery-item img { height: 125px; } .posts-viewer-prev, .posts-viewer-next { width: 36px; height: 52px; } }
+    @media (max-width: 600px) { .published-post-gallery-item img { height: 125px; } .published-post-gallery.four-up .published-post-gallery-item img { height: 110px; } .posts-viewer-prev, .posts-viewer-next { width: 36px; height: 52px; } }
   `;
   document.head.appendChild(style);
   const galleryGrid = galleryOverlay.querySelector('.posts-gallery-grid');
@@ -143,8 +147,9 @@
 
       const images = post.images || [];
       const gallery = document.createElement('div');
-      gallery.className = 'published-post-gallery';
-      images.slice(0, 3).forEach((image, index) => {
+      const fourOrMore = images.length >= 4;
+      gallery.className = `published-post-gallery${fourOrMore ? ' four-up' : ''}`;
+      images.slice(0, fourOrMore ? 4 : 3).forEach((image, index) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'published-post-gallery-item';
@@ -153,10 +158,10 @@
         imageElement.alt = post.title || 'Published post image';
         imageElement.loading = 'eager';
         button.appendChild(imageElement);
-        if (index === 2 && images.length > 3) {
+        if (index === 3 && images.length > 4) {
           const more = document.createElement('span');
           more.className = 'published-post-gallery-more';
-          more.textContent = `+${images.length - 3}`;
+          more.textContent = `+${images.length - 4}`;
           button.appendChild(more);
         }
         button.addEventListener('click', () => openGallery(images));
