@@ -59,16 +59,8 @@
       .profile-chip { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; }
       .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #dbeafe, #bfdbfe); display: grid; place-items: center; font-weight: 700; color: var(--primary); }
       .content { padding: 26px; }
-      .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-bottom: 24px; }
       .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
-      .stat-card { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
-      .stat-top { display: flex; justify-content: space-between; align-items: center; }
-      .stat-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 1.1rem; background: var(--primary-soft); color: var(--primary); }
-      .stat-value { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.04em; }
-      .stat-label { color: var(--muted); font-size: 0.86rem; }
-      .trend-up { color: var(--success); background: rgba(21,156,111,0.08); padding: 6px 8px; border-radius: 999px; font-size: 0.72rem; }
-      .trend-down { color: var(--danger); background: rgba(220,38,38,0.08); padding: 6px 8px; border-radius: 999px; font-size: 0.72rem; }
-      .sections-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+      .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
       .panel { padding: 20px; }
       .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 14px; }
       .panel-title { font-size: 1.08rem; font-weight: 700; margin: 0; }
@@ -79,8 +71,12 @@
       .activity-meta { flex: 1; }
       .activity-name { font-weight: 600; }
       .activity-time { color: var(--muted); font-size: 0.76rem; }
-      .action-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-      .action-btn { padding: 11px 15px; border: 1px solid var(--border); background: var(--panel-alt); border-radius: 12px; font-weight: 600; cursor: pointer; }
+      .table-list { display: flex; flex-direction: column; gap: 10px; }
+      .table-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+      .table-row:last-child { border-bottom: none; }
+      .table-label { color: var(--muted); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }
+      .table-value { margin-top: 4px; font-weight: 600; overflow-wrap: anywhere; }
+      .approval-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
       .hidden { display: none !important; }
       .alert { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: #ecfeff; color: #0f172a; margin-bottom: 18px; display: none; }
       .alert.show { display: block; }
@@ -104,8 +100,8 @@
       .submit-btn.loading .loading { display: inline-block; }
       .submit-btn.loading .label { display: none; }
       .muted-link { display: inline-block; margin-top: 14px; color: var(--primary); text-align: center; width: 100%; }
-      @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sections-grid { grid-template-columns: 1fr; } }
-      @media (max-width: 820px) { .app-shell { grid-template-columns: 1fr; } .sidebar { position: relative; height: auto; } .topbar { padding: 14px 16px; } .content { padding: 18px 16px; } .stats-grid { grid-template-columns: 1fr; } }
+      @media (max-width: 1100px) { .dashboard-grid { grid-template-columns: 1fr; } }
+      @media (max-width: 820px) { .app-shell { grid-template-columns: 1fr; } .sidebar { position: relative; height: auto; } .topbar { padding: 14px 16px; } .content { padding: 18px 16px; } .table-row { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
@@ -155,7 +151,7 @@
         <div class="nav-section">
           <div class="nav-label">Navigation</div>
           <ul class="nav-list">
-            <li class="nav-item active" data-section="dashboard" data-api="/api/admin/dashboard/summary"><span class="icon">▣</span><span class="text">Dashboard</span><span class="bullet"></span></li>
+            <li class="nav-item active" data-section="dashboard"><span class="icon">▣</span><span class="text">Dashboard</span><span class="bullet"></span></li>
             <li class="nav-item" data-section="posts" data-api="/api/admin/posts"><span class="icon">✎</span><span class="text">New Post</span></li>
             <li class="nav-item" data-section="posts" data-api="/api/admin/posts"><span class="icon">📰</span><span class="text">Posts</span></li>
             <li class="nav-item" data-section="announcements" data-api="/api/admin/announcements"><span class="icon">📣</span><span class="text">Announcements</span></li>
@@ -196,76 +192,19 @@
         <div class="content">
           <div id="dashboardSection" class="admin-section">
           <div id="dashboardAlert" class="alert"></div>
-          <div class="stats-grid">
-            <div class="card stat-card">
-              <div class="stat-top"><div class="stat-icon">📝</div><span class="trend-up">+12%</span></div>
-              <div class="stat-value" id="statPosts">0</div>
-              <div class="stat-label">Total Posts</div>
-            </div>
-            <div class="card stat-card">
-              <div class="stat-top"><div class="stat-icon">📣</div><span class="trend-up">+8%</span></div>
-              <div class="stat-value" id="statAnnouncements">0</div>
-              <div class="stat-label">Total Announcements</div>
-            </div>
-            <div class="card stat-card">
-              <div class="stat-top"><div class="stat-icon">🖼️</div><span class="trend-up">+15%</span></div>
-              <div class="stat-value" id="statImages">0</div>
-              <div class="stat-label">Total Images</div>
-            </div>
-            <div class="card stat-card">
-              <div class="stat-top"><div class="stat-icon">⏳</div><span class="trend-down">-2%</span></div>
-              <div class="stat-value" id="statApprovals">0</div>
-              <div class="stat-label">Pending Approvals</div>
-            </div>
-          </div>
-
-          <div class="sections-grid">
-            <div class="card panel">
-              <div class="panel-header">
-                <h2 class="panel-title">Recent Activity</h2>
-                <button class="secondary-btn">View all</button>
-              </div>
-              <div id="activityList" class="activity-list"></div>
-            </div>
-            <div class="card panel">
-              <div class="panel-header">
-                <h2 class="panel-title">Quick Actions</h2>
-              </div>
-              <div class="action-row">
-                <button class="action-btn">Create Post</button>
-                <button class="action-btn">Create Announcement</button>
-                <button class="action-btn">Upload Image</button>
-                <button class="action-btn">Approve Login</button>
-              </div>
-            </div>
-          </div>
-          <div class="sections-grid" style="margin-top:18px;">
-            <div id="pendingApprovalsPanel" class="card panel super-admin-only">
+          <div class="dashboard-grid">
+            <div id="pendingApprovalsPanel" class="card panel">
               <div class="panel-header">
                 <h2 class="panel-title">Pending Approvals</h2>
-                <span id="pendingApprovalCount" class="trend-down">0</span>
               </div>
               <div id="pendingApprovalsList" class="activity-list"></div>
             </div>
-            <div id="alertsPanel" class="card panel super-admin-only">
-              <div class="panel-header">
-                <h2 class="panel-title">Alerts</h2>
-                <span id="alertCount" class="trend-down">0</span>
-              </div>
-              <div id="alertsList" class="activity-list"></div>
-            </div>
-          </div>
-          <div class="sections-grid" style="margin-top:18px;">
             <div class="card panel">
-              <div class="panel-header">
-                <h2 class="panel-title">Recent Activities</h2>
-              </div>
+              <div class="panel-header"><h2 class="panel-title">Recent Activities</h2></div>
               <div id="recentActivitiesList" class="activity-list"></div>
             </div>
-            <div id="createUserPanel" class="card panel super-admin-only">
-              <div class="panel-header">
-                <h2 class="panel-title">Create New User</h2>
-              </div>
+            <div id="createUserPanel" class="card panel">
+              <div class="panel-header"><h2 class="panel-title">Create New User</h2></div>
               <form id="createUserForm">
                 <div class="field"><label for="newUserName">Name</label><input id="newUserName" required maxlength="120" /></div>
                 <div class="field"><label for="newUserEmail">Email Address</label><input id="newUserEmail" type="email" required /></div>
@@ -273,8 +212,14 @@
                 <div class="field"><label for="newUserPassword">Password</label><input id="newUserPassword" type="password" minlength="8" required /></div>
                 <div class="field"><label for="newUserConfirmPassword">Confirm Password</label><input id="newUserConfirmPassword" type="password" minlength="8" required /></div>
                 <div id="createUserAlert" class="alert"></div>
-                <button class="primary-btn" type="submit">Create New User</button>
+                <button class="primary-btn" type="submit">Create User</button>
               </form>
+            </div>
+            <div id="alertsPanel" class="card panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Alerts</h2>
+              </div>
+              <div id="alertsList" class="activity-list"></div>
             </div>
           </div>
           </div>
@@ -326,7 +271,6 @@
       const adminRole = document.getElementById('adminRole');
       const userAvatar = document.getElementById('userAvatar');
       const navItems = [...document.querySelectorAll('.nav-item')];
-      const actionButtons = [...document.querySelectorAll('.action-btn')];
       const pageTitle = document.querySelector('.page-title');
       const dashboardSection = document.getElementById('dashboardSection');
       const resourceSection = document.getElementById('resourceSection');
@@ -351,8 +295,6 @@
       const pendingApprovalsList = document.getElementById('pendingApprovalsList');
       const recentActivitiesList = document.getElementById('recentActivitiesList');
       const alertsList = document.getElementById('alertsList');
-      const pendingApprovalCount = document.getElementById('pendingApprovalCount');
-      const alertCount = document.getElementById('alertCount');
       const createUserForm = document.getElementById('createUserForm');
       const createUserAlert = document.getElementById('createUserAlert');
       let authenticatedAdmin = null;
@@ -593,12 +535,10 @@
               <div class="activity-name">${escapeHtml(item.actor_name || item.actor_email || 'System')}</div>
               <div class="activity-time">${escapeHtml(item.details || item.action)} · ${escapeHtml(item.created_at)}${item.device_info ? ` · ${escapeHtml(item.device_info)}` : ''}</div>
             </div>
-            <span class="trend-up">${escapeHtml(item.result || 'success')}</span>
           </div>`).join('');
       }
 
       function renderPendingApprovals(items) {
-        pendingApprovalCount.textContent = String(items.length);
         if (!items.length) {
           pendingApprovalsList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No pending approvals.</div></div></div>';
           return;
@@ -609,13 +549,14 @@
               <div class="activity-name">${escapeHtml(item.name)}</div>
               <div class="activity-time">${escapeHtml(item.email)} · ${escapeHtml(item.requested_role || 'Role not specified')} · ${escapeHtml(item.created_at)} · ${escapeHtml(item.device_info || 'Device unavailable')}</div>
             </div>
-            <button class="mini-btn approval-allow" data-id="${escapeHtml(item.id)}">Allow</button>
-            <button class="danger-btn approval-deny" data-id="${escapeHtml(item.id)}">Deny</button>
+            <div class="approval-actions">
+              <button class="mini-btn approval-allow" data-id="${escapeHtml(item.id)}">Allow</button>
+              <button class="danger-btn approval-deny" data-id="${escapeHtml(item.id)}">Deny</button>
+            </div>
           </div>`).join('');
       }
 
       function renderSecurityAlerts(items) {
-        alertCount.textContent = String(items.filter(item => !item.is_read).length);
         if (!items.length) {
           alertsList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No security alerts.</div></div></div>';
           return;
@@ -632,10 +573,11 @@
 
       async function loadDashboardPanels() {
         const isSuperAdmin = authenticatedAdmin?.role === 'SUPER_ADMIN';
-        [pendingPanel, alertsPanel, createUserPanel].forEach(panel => panel.classList.toggle('hidden', !isSuperAdmin));
         const activityResponse = await apiRequest('/api/admin/recent-activity');
         renderRecentActivities(activityResponse);
         if (!isSuperAdmin) {
+          pendingApprovalsList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">Only Super Admin can review pending approvals.</div></div></div>';
+          renderSecurityAlerts(await apiRequest('/api/admin/alerts'));
           return;
         }
         const [pending, alerts] = await Promise.all([
@@ -754,56 +696,8 @@
         item.addEventListener('click', () => showSection(item.dataset.section, item));
       });
 
-      actionButtons.forEach(button => {
-        button.addEventListener('click', async () => {
-          const action = button.textContent.trim();
-          const resource = action.includes('Post') ? '/api/admin/posts'
-            : action.includes('Announcement') ? '/api/admin/announcements'
-              : action.includes('Image') ? '/api/admin/media'
-                : '/api/admin/login-requests';
-          dashboardSection.classList.add('hidden');
-          resourceSection.classList.remove('hidden');
-          pageTitle.textContent = action;
-          resourceTitle.textContent = action;
-          hideAlert(dashboardAlert);
-          hideAlert(resourceAlert);
-          try {
-            const data = await apiRequest(resource, { method: 'GET' });
-            renderResource(data);
-          } catch (error) {
-            showAlert(resourceAlert, error.message, 'error');
-            if (error.message.includes('Authentication required')) {
-              showLogin();
-            }
-          }
-        });
-      });
-
       async function loadDashboardData() {
         try {
-          const summary = await apiRequest('/api/admin/dashboard/summary');
-          document.getElementById('statPosts').textContent = summary.stats.total_posts;
-          document.getElementById('statAnnouncements').textContent = summary.stats.total_announcements;
-          document.getElementById('statImages').textContent = summary.stats.total_images;
-          document.getElementById('statApprovals').textContent = summary.stats.pending_login_approvals;
-
-          const activityList = document.getElementById('activityList');
-          if (!summary.recent_activity || !summary.recent_activity.length) {
-            activityList.innerHTML = '<div class="activity-item"><div class="activity-meta"><div class="activity-name">No recent activity</div></div></div>';
-            await loadDashboardPanels();
-            return;
-          }
-
-          activityList.innerHTML = summary.recent_activity.map(item => `
-            <div class="activity-item">
-              <span class="dot"></span>
-              <div class="activity-meta">
-                <div class="activity-name">${escapeHtml(item.actor_name || item.actor_email || 'System')}</div>
-                <div class="activity-time">${escapeHtml(item.details || item.action || 'Activity')} · ${escapeHtml(item.created_at || 'Today')}</div>
-              </div>
-              <span class="trend-up">${escapeHtml(item.result || 'Done')}</span>
-            </div>
-          `).join('');
           await loadDashboardPanels();
         } catch (error) {
           showAlert(dashboardAlert, 'Unable to load dashboard data.', 'error');

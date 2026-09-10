@@ -800,8 +800,8 @@ def admin_login():
 
 @app.route('/api/admin/users', methods=['POST'])
 @require_admin
-@require_roles('SUPER_ADMIN')
 def create_admin_user():
+    actor = current_admin_record()
     payload = request.get_json(silent=True) or {}
     name = (payload.get('name') or '').strip()
     email = (payload.get('email') or '').strip().lower()
@@ -817,21 +817,36 @@ def create_admin_user():
     if len(password) < 8 or password != confirm_password:
         return jsonify(error='Passwords must match and be at least 8 characters.'), 400
 
+    is_super_admin = actor.get('role') == 'SUPER_ADMIN'
+    account_status = 'active' if is_super_admin else 'pending'
     conn = get_db()
     try:
         cursor = conn.execute(
             'INSERT INTO admins (username, email, full_name, password_hash, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (email, email, name, generate_password_hash(password), role, 'active', iso_now()),
+            (email, email, name, generate_password_hash(password), role, account_status, iso_now()),
         )
-        conn.commit()
         user_id = cursor.lastrowid
+        if not is_super_admin:
+            conn.execute(
+                '''
+                INSERT INTO login_requests (name, email, user_type, profile_info, request_id, requested_role,
+                                            device_info, admin_id, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                ''',
+                (name, email, 'Admin', '', str(uuid.uuid4())[:8], role, request_device_info(), user_id, iso_now()),
+            )
+        conn.commit()
     except sqlite3.IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify(error='An account with that email already exists.'), 409
     conn.close()
-    record_activity('user_created', target=f'admin:{user_id}', details=f'Created {role} account for {email}.', admin_id=session['admin_id'])
-    return jsonify(message='User created successfully.', user_id=user_id), 201
+    if is_super_admin:
+        record_activity('user_created', target=f'admin:{user_id}', details=f'Created active {role} account for {email}.', admin_id=actor['id'])
+        return jsonify(message='User created successfully.', user_id=user_id, status='active'), 201
+
+    record_activity('pending_approval', target=f'admin:{user_id}', details=f'Requested {role} account for {email}.', admin_id=actor['id'])
+    return jsonify(message='User creation submitted for Super Admin approval.', user_id=user_id, status='pending'), 202
 
 
 @app.route('/api/admin/logout', methods=['POST'])
@@ -854,37 +869,6 @@ def admin_me():
 @app.route('/api/admin/session')
 def admin_session():
     return admin_me()
-
-
-@app.route('/api/admin/dashboard/summary')
-@require_admin
-def dashboard_summary():
-    conn = get_db()
-    admin = current_admin_record()
-    stats = {
-        'total_posts': conn.execute('SELECT COUNT(*) FROM posts').fetchone()[0],
-        'total_announcements': conn.execute('SELECT COUNT(*) FROM announcements').fetchone()[0],
-        'total_images': conn.execute('SELECT COUNT(*) FROM media').fetchone()[0],
-        'pending_login_approvals': conn.execute("SELECT COUNT(*) FROM login_requests WHERE status = 'pending'").fetchone()[0],
-        'messages': conn.execute('SELECT COUNT(*) FROM messages').fetchone()[0],
-        'feedback': conn.execute("SELECT COUNT(*) FROM messages WHERE subject = 'Website Feedback'").fetchone()[0],
-        'website_visitors': 0,
-        'active_admins': conn.execute("SELECT COUNT(*) FROM admins WHERE status = 'active'").fetchone()[0],
-        'unread_alerts': conn.execute('SELECT COUNT(*) FROM security_alerts WHERE is_read = 0').fetchone()[0] if admin and admin.get('role') == 'SUPER_ADMIN' else 0,
-    }
-
-    recent_activity = []
-    for row in conn.execute(
-        'SELECT actor_name, actor_email, action, details, result, device_info, created_at FROM activity_logs ORDER BY created_at DESC LIMIT 10',
-    ).fetchall():
-        recent_activity.append(dict(row))
-    alerts = []
-    if admin and admin.get('role') == 'SUPER_ADMIN':
-        alerts = [dict(row) for row in conn.execute(
-            'SELECT id, alert_type, description, account, device_info, module, severity, is_read, created_at FROM security_alerts ORDER BY created_at DESC LIMIT 10',
-        ).fetchall()]
-    conn.close()
-    return jsonify({'stats': stats, 'recent_activity': recent_activity, 'alerts': alerts})
 
 
 @app.route('/api/post-sections', methods=['GET'])
@@ -1252,23 +1236,15 @@ def list_notifications():
 @require_admin
 def recent_activity():
     conn = get_db()
-    admin = current_admin_record()
-    if admin and admin.get('role') == 'SUPER_ADMIN':
-        rows = conn.execute(
-            'SELECT id, actor_name, actor_email, action, target, details, result, device_info, created_at FROM activity_logs ORDER BY created_at DESC LIMIT 50',
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            'SELECT id, actor_name, actor_email, action, target, details, result, device_info, created_at FROM activity_logs WHERE admin_id = ? ORDER BY created_at DESC LIMIT 50',
-            (admin['id'],),
-        ).fetchall()
+    rows = conn.execute(
+        'SELECT id, actor_name, actor_email, action, target, details, result, device_info, created_at FROM activity_logs ORDER BY created_at DESC LIMIT 50',
+    ).fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
 
 @app.route('/api/admin/alerts', methods=['GET'])
 @require_admin
-@require_roles('SUPER_ADMIN')
 def list_security_alerts():
     conn = get_db()
     rows = conn.execute(

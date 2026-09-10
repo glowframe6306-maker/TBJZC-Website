@@ -18,7 +18,7 @@ class AdminAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertIn('error', response.get_json())
 
-    def test_admin_session_can_access_summary(self):
+    def test_admin_session_can_access_dashboard_data(self):
         login = self.client.post('/api/admin/login', json={
             'username': 'admin',
             'password': 'admin123'
@@ -29,11 +29,9 @@ class AdminAuthTests(unittest.TestCase):
         self.assertEqual(me.status_code, 200)
         self.assertTrue(me.get_json()['logged_in'])
 
-        response = self.client.get('/api/admin/dashboard/summary')
+        response = self.client.get('/api/admin/recent-activity')
         self.assertEqual(response.status_code, 200)
-        payload = response.get_json()
-        self.assertIn('stats', payload)
-        self.assertIn('recent_activity', payload)
+        self.assertIsInstance(response.get_json(), list)
 
     def test_session_cookie_survives_refresh_and_logout_clears_access(self):
         login = self.client.post('/api/admin/login', json={
