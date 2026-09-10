@@ -58,7 +58,7 @@
 
       const meta = document.createElement('small');
       meta.className = 'published-post-meta';
-      meta.textContent = `Published: ${formatPublished(post.publish_date || post.created_at)} · By: ${post.author || 'TBJZC'}`;
+      meta.textContent = formatPublished(post.publish_date || post.created_at);
       article.appendChild(meta);
       container.appendChild(article);
     });
