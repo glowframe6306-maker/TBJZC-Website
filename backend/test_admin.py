@@ -1,5 +1,6 @@
 import unittest
 import io
+import os
 import uuid
 
 from backend.app import app
@@ -260,6 +261,33 @@ class AdminAuthTests(unittest.TestCase):
         after_relogin = {post['id'] for post in self.client.get('/api/admin/posts').get_json()}
         self.assertNotIn(post_a_id, after_relogin)
         self.assertIn(post_b_id, after_relogin)
+
+    def test_vercel_upload_requires_blob_configuration_without_creating_post(self):
+        previous_vercel = os.environ.get('VERCEL')
+        previous_token = os.environ.pop('BLOB_READ_WRITE_TOKEN', None)
+        os.environ['VERCEL'] = '1'
+        try:
+            import backend.app as app_module
+            original_is_vercel = app_module.IS_VERCEL
+            app_module.IS_VERCEL = True
+            login = self.client.post('/api/admin/login', json={
+                'username': 'admin',
+                'password': 'admin123',
+            })
+            self.assertEqual(login.status_code, 200)
+            response = self.client.post('/api/admin/post-images', data={
+                'photo': (io.BytesIO(b'not-a-real-image'), 'image.png'),
+            }, content_type='multipart/form-data')
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('BLOB_READ_WRITE_TOKEN', response.get_json()['error'])
+            app_module.IS_VERCEL = original_is_vercel
+        finally:
+            if previous_vercel is None:
+                os.environ.pop('VERCEL', None)
+            else:
+                os.environ['VERCEL'] = previous_vercel
+            if previous_token is not None:
+                os.environ['BLOB_READ_WRITE_TOKEN'] = previous_token
 
 
 if __name__ == '__main__':

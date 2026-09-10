@@ -48,7 +48,6 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / 'tbjzc_cms.db'
 UPLOADS_DIR = DATA_DIR / 'uploads' if IS_VERCEL else IMAGES_DIR / 'uploads'
-BLOB_READ_WRITE_TOKEN = os.environ.get('BLOB_READ_WRITE_TOKEN', '').strip()
 
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
 secret_key = os.environ.get('FLASK_SECRET_KEY')
@@ -71,6 +70,10 @@ def normalize_env_value(value):
     if value is None:
         return ''
     return value.strip().strip('"').strip("'")
+
+
+def get_blob_read_write_token():
+    return normalize_env_value(os.environ.get('BLOB_READ_WRITE_TOKEN'))
 
 
 def get_admin_credentials():
@@ -158,14 +161,15 @@ def save_post_images(files):
             if not image_bytes:
                 raise ValueError('Uploaded image is empty.')
             if IS_VERCEL:
-                if not BLOB_READ_WRITE_TOKEN:
+                blob_token = get_blob_read_write_token()
+                if not blob_token:
                     raise ValueError('Persistent image storage is not configured. Set BLOB_READ_WRITE_TOKEN in Vercel.')
                 blob_request = urllib.request.Request(
                     f'https://blob.vercel-storage.com/post-images/{stored_name}',
                     data=image_bytes,
                     method='PUT',
                     headers={
-                        'Authorization': f'Bearer {BLOB_READ_WRITE_TOKEN}',
+                        'Authorization': f'Bearer {blob_token}',
                         'x-api-version': '7',
                         'x-content-type': uploaded.mimetype or 'application/octet-stream',
                         'x-add-random-suffix': '0',
@@ -668,7 +672,12 @@ def serve_static(filename):
 
 @app.route('/health')
 def health():
-    return jsonify(status='ok', feedback_dir=str(FEEDBACK_DIR), is_vercel=IS_VERCEL)
+    return jsonify(
+        status='ok',
+        feedback_dir=str(FEEDBACK_DIR),
+        is_vercel=IS_VERCEL,
+        blob_storage_configured=bool(get_blob_read_write_token()) if IS_VERCEL else None,
+    )
 
 
 @app.route('/info')
@@ -1056,11 +1065,12 @@ def delete_unshared_post_images(image_urls, deleted_post_id):
         if not isinstance(image_url, str):
             continue
         if image_url.startswith(('https://', 'http://')):
-            if BLOB_READ_WRITE_TOKEN and '.blob.vercel-storage.com/' in image_url:
+            blob_token = get_blob_read_write_token()
+            if blob_token and '.blob.vercel-storage.com/' in image_url:
                 delete_request = urllib.request.Request(
                     image_url,
                     method='DELETE',
-                    headers={'Authorization': f'Bearer {BLOB_READ_WRITE_TOKEN}'},
+                    headers={'Authorization': f'Bearer {blob_token}'},
                 )
                 try:
                     urllib.request.urlopen(delete_request, timeout=30).close()
