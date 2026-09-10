@@ -210,7 +210,7 @@ class AdminAuthTests(unittest.TestCase):
         stored = self.client.get('/api/admin/posts').get_json()
         stored_sports = next(post for post in stored if post['id'] == sports_payload['id'])
         self.assertEqual(stored_sports['section'], 'sports')
-        self.assertEqual(stored_sports['author'], 'Super Administrator')
+        self.assertEqual(stored_sports['author'], 'admin')
 
 
 if __name__ == '__main__':

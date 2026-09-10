@@ -11,6 +11,16 @@
       return image;
     }
   };
+  const formatPublished = value => {
+    if (!value) return '';
+    const parsed = new Date(`${String(value).replace(' ', 'T')}Z`);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return new Intl.DateTimeFormat(undefined, {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: true,
+      timeZone: 'Asia/Colombo'
+    }).format(parsed);
+  };
 
   function render(posts) {
     container.replaceChildren();
@@ -48,7 +58,7 @@
 
       const meta = document.createElement('small');
       meta.className = 'published-post-meta';
-      meta.textContent = `${post.author || 'TBJZC'} · ${post.created_at || ''}`;
+      meta.textContent = `Published: ${formatPublished(post.publish_date || post.created_at)} · By: ${post.author || 'TBJZC'}`;
       article.appendChild(meta);
       container.appendChild(article);
     });

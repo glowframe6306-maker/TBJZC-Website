@@ -307,6 +307,7 @@ def ensure_default_data():
             content TEXT,
             category TEXT,
             section TEXT,
+            author_id INTEGER,
             author TEXT,
             status TEXT,
             featured_image TEXT,
@@ -433,6 +434,7 @@ def ensure_default_data():
         ('activity_logs', 'actor_email', 'TEXT'),
         ('activity_logs', 'device_info', 'TEXT'),
         ('posts', 'section', 'TEXT'),
+        ('posts', 'author_id', 'INTEGER'),
         ('posts', 'images', 'TEXT'),
     ]:
         existing_columns = {row['name'] for row in conn.execute(f'PRAGMA table_info({table_name})').fetchall()}
@@ -944,14 +946,16 @@ def manage_posts():
         return jsonify(error=f'Unable to store uploaded images: {error}'), 503
 
     now = iso_now()
-    author = session.get('admin', {}).get('full_name', 'Administrator')
+    admin = current_admin_record()
+    author_id = admin['id'] if admin else None
+    author = admin['username'] if admin else 'Administrator'
     conn = get_db()
     cursor = conn.execute(
         '''
-        INSERT INTO posts (title, short_description, content, category, section, author, status, featured_image, images, tags, publish_date, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO posts (title, short_description, content, category, section, author_id, author, status, featured_image, images, tags, publish_date, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
-        (title, description, description, section, section, author, payload.get('status') or 'published', images[0] if images else '', json.dumps(images), '', payload.get('publish_date') or now, now, now),
+        (title, description, description, section, section, author_id, author, payload.get('status') or 'published', images[0] if images else '', json.dumps(images), '', now, now, now),
     )
     conn.commit()
     post_id = cursor.lastrowid

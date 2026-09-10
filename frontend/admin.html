@@ -410,7 +410,7 @@
       function renderPostPreviews() {
         postPreview.innerHTML = selectedPostFiles.map((file, index) => `
           <div style="position:relative;">
-            <img src="${URL.createObjectURL(file)}" alt="Selected photo ${index + 1}" style="width:140px;height:100px;object-fit:cover;border-radius:8px;">
+            <img src="${URL.createObjectURL(file)}" alt="Selected photo ${index + 1}" style="width:180px;max-height:140px;object-fit:contain;border-radius:8px;display:block;">
             <button type="button" class="danger-btn remove-post-photo" data-index="${index}" style="position:absolute;right:4px;top:4px;padding:4px 8px;">Remove</button>
           </div>`).join('');
       }
@@ -434,10 +434,10 @@
           const image = (post.images || [])[0];
           const imageUrl = resolveImageUrl(image);
           return `<div class="activity-item">
-            ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:72px;height:54px;object-fit:cover;border-radius:8px;">` : ''}
+            ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:110px;max-height:110px;object-fit:contain;border-radius:8px;">` : ''}
             <div class="activity-meta">
               <div class="activity-name">${escapeHtml(post.title)}</div>
-              <div class="activity-time">${escapeHtml((post.section || post.category || 'Unassigned').toUpperCase())} · ${escapeHtml(post.short_description || '')} · ${escapeHtml(post.created_at || '')} · ${escapeHtml(post.author || '')}</div>
+              <div class="activity-time">${escapeHtml((post.section || post.category || 'Unassigned').toUpperCase())} · ${escapeHtml(post.short_description || '')} · Published: ${escapeHtml(post.publish_date || post.created_at || '')} · By: ${escapeHtml(post.author || '')}</div>
             </div>
             <button class="mini-btn edit-post" data-id="${post.id}">Edit</button>
             <button class="danger-btn delete-post" data-id="${post.id}">Delete</button>
@@ -483,6 +483,7 @@
         const editButton = event.target.closest('.edit-post');
         const deleteButton = event.target.closest('.delete-post');
         if (deleteButton) {
+          if (!window.confirm('Delete this published post? This action cannot be undone.')) return;
           try {
             await apiRequest(`/api/admin/posts/${deleteButton.dataset.id}`, { method: 'DELETE' });
             await refreshPostWorkspace();
