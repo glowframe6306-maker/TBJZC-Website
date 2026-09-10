@@ -54,6 +54,26 @@ class AdminAuthTests(unittest.TestCase):
         self.assertEqual(after_logout.status_code, 401)
         self.assertEqual(after_logout.get_json()['error'], 'Authentication required.')
 
+    def test_profile_picture_is_persisted_and_removable(self):
+        login = self.client.post('/api/admin/login', json={
+            'username': 'admin',
+            'password': 'admin123'
+        })
+        self.assertEqual(login.status_code, 200)
+        upload = self.client.post(
+            '/api/admin/profile-picture',
+            data={'profile_picture': (io.BytesIO(b'profile-image'), 'profile.png')},
+            content_type='multipart/form-data',
+        )
+        self.assertEqual(upload.status_code, 200)
+        profile_picture = upload.get_json()['profile_picture']
+        self.assertTrue(profile_picture.startswith('/images/uploads/profile-'))
+        refreshed = self.client.get('/api/admin/me')
+        self.assertEqual(refreshed.get_json()['admin']['profile_picture'], profile_picture)
+        removed = self.client.delete('/api/admin/profile-picture')
+        self.assertEqual(removed.status_code, 200)
+        self.assertIsNone(self.client.get('/api/admin/me').get_json()['admin']['profile_picture'])
+
     def test_registration_approval_denial_and_security_records(self):
         suffix = uuid.uuid4().hex[:8]
         pending_email = f'pending_{suffix}@example.com'

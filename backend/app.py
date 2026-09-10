@@ -264,6 +264,7 @@ def ensure_default_data():
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'CONTENT_ADMIN',
             status TEXT DEFAULT 'active',
+            profile_picture TEXT,
             created_at TEXT,
             last_login TEXT
         );
@@ -415,6 +416,7 @@ def ensure_default_data():
     )
 
     for table_name, column_name, column_definition in [
+        ('admins', 'profile_picture', 'TEXT'),
         ('login_requests', 'requested_role', 'TEXT'),
         ('login_requests', 'username', 'TEXT'),
         ('login_requests', 'device_info', 'TEXT'),
@@ -789,6 +791,7 @@ def admin_login():
         'email': admin['email'],
         'full_name': admin['full_name'],
         'role': admin['role'],
+        'profile_picture': admin['profile_picture'],
     }
     session['expires_at'] = (datetime.utcnow() + (timedelta(days=30) if payload.get('remember_me') else timedelta(hours=8))).isoformat()
 
@@ -851,12 +854,68 @@ def admin_me():
     if not ensure_session_valid():
         return jsonify(logged_in=False), 401
     admin = current_admin_record()
-    return jsonify({'logged_in': True, 'admin': session.get('admin', admin)})
+    if not admin or admin.get('status') != 'active':
+        session.clear()
+        return jsonify(error='Session expired or account disabled.'), 401
+    current_identity = {
+        'id': admin['id'],
+        'username': admin['username'],
+        'email': admin['email'],
+        'full_name': admin['full_name'],
+        'role': admin['role'],
+        'profile_picture': admin.get('profile_picture'),
+    }
+    session['admin'] = current_identity
+    return jsonify({'logged_in': True, 'admin': current_identity})
 
 
 @app.route('/api/admin/session')
 def admin_session():
     return admin_me()
+
+
+@app.route('/api/admin/profile-picture', methods=['POST', 'DELETE'])
+@require_admin
+def manage_profile_picture():
+    admin = current_admin_record()
+    upload_dir = IMAGES_DIR / 'uploads'
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    previous_url = admin.get('profile_picture')
+
+    if request.method == 'DELETE':
+        profile_picture = None
+    else:
+        uploaded = request.files.get('profile_picture')
+        if not uploaded or not uploaded.filename:
+            return jsonify(error='Please choose a profile picture.'), 400
+        extension = Path(secure_filename(uploaded.filename)).suffix.lower()
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.webp'}
+        allowed_mimetypes = {'image/jpeg', 'image/png', 'image/webp'}
+        if extension not in allowed_extensions or uploaded.mimetype not in allowed_mimetypes:
+            return jsonify(error='Only JPG, JPEG, PNG, and WEBP images are allowed.'), 400
+        stored_name = f'profile-{admin["id"]}-{uuid.uuid4().hex}{extension}'
+        destination = upload_dir / stored_name
+        uploaded.save(destination)
+        if destination.stat().st_size > 5 * 1024 * 1024:
+            destination.unlink(missing_ok=True)
+            return jsonify(error='Profile pictures must be 5 MB or smaller.'), 400
+        profile_picture = f'/images/uploads/{stored_name}'
+
+    conn = get_db()
+    conn.execute('UPDATE admins SET profile_picture = ? WHERE id = ?', (profile_picture, admin['id']))
+    conn.commit()
+    conn.close()
+    if previous_url and previous_url.startswith('/images/uploads/'):
+        (upload_dir / Path(previous_url).name).unlink(missing_ok=True)
+
+    session['admin']['profile_picture'] = profile_picture
+    record_activity(
+        'profile_picture_updated' if profile_picture else 'profile_picture_removed',
+        target=f'admin:{admin["id"]}',
+        details='Updated profile picture.' if profile_picture else 'Removed profile picture.',
+        admin_id=admin['id'],
+    )
+    return jsonify(message='Profile picture updated successfully.', profile_picture=profile_picture)
 
 
 @app.route('/api/post-sections', methods=['GET'])

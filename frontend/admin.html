@@ -59,6 +59,11 @@
       .profile-chip { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; }
       .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #dbeafe, #bfdbfe); display: grid; place-items: center; font-weight: 700; color: var(--primary); }
       .content { padding: 26px; }
+      .dashboard-profile { display: flex; align-items: center; gap: 14px; padding: 16px 18px; margin-bottom: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+      .dashboard-profile-picture { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: linear-gradient(135deg, #dbeafe, #bfdbfe); display: grid; place-items: center; font-weight: 700; font-size: 1.25rem; color: var(--primary); }
+      .dashboard-profile-username { font-size: 1.05rem; font-weight: 700; }
+      .dashboard-profile-role { color: var(--muted); margin-top: 4px; font-size: 0.82rem; }
+      .profile-preview { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; background: linear-gradient(135deg, #dbeafe, #bfdbfe); display: grid; place-items: center; font-weight: 700; color: var(--primary); }
       .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
       .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
       .panel { padding: 20px; }
@@ -192,6 +197,13 @@
         <div class="content">
           <div id="dashboardSection" class="admin-section">
           <div id="dashboardAlert" class="alert"></div>
+          <div class="dashboard-profile">
+            <div id="dashboardProfilePicture" class="dashboard-profile-picture">A</div>
+            <div>
+              <div id="dashboardProfileUsername" class="dashboard-profile-username">Admin</div>
+              <div id="dashboardProfileRole" class="dashboard-profile-role">Administrator</div>
+            </div>
+          </div>
           <div class="dashboard-grid">
             <div id="pendingApprovalsPanel" class="card panel">
               <div class="panel-header">
@@ -270,6 +282,9 @@
       const adminName = document.getElementById('adminName');
       const adminRole = document.getElementById('adminRole');
       const userAvatar = document.getElementById('userAvatar');
+      const dashboardProfilePicture = document.getElementById('dashboardProfilePicture');
+      const dashboardProfileUsername = document.getElementById('dashboardProfileUsername');
+      const dashboardProfileRole = document.getElementById('dashboardProfileRole');
       const navItems = [...document.querySelectorAll('.nav-item')];
       const pageTitle = document.querySelector('.page-title');
       const dashboardSection = document.getElementById('dashboardSection');
@@ -382,6 +397,11 @@
         adminName.textContent = admin.full_name || admin.username || 'Admin';
         adminRole.textContent = admin.role || 'Administrator';
         userAvatar.textContent = (admin.full_name || admin.username || 'A').charAt(0).toUpperCase();
+        dashboardProfileUsername.textContent = admin.username || 'Admin';
+        dashboardProfileRole.textContent = admin.role || 'Administrator';
+        dashboardProfilePicture.textContent = admin.profile_picture ? '' : (admin.username || 'A').charAt(0).toUpperCase();
+        dashboardProfilePicture.style.backgroundImage = admin.profile_picture ? `url("${escapeHtml(admin.profile_picture)}")` : '';
+        dashboardProfilePicture.style.backgroundSize = admin.profile_picture ? 'cover' : '';
         loadDashboardData();
       }
 
@@ -660,6 +680,68 @@
           </div>`;
       }
 
+      function renderSettings(settings) {
+        resourceContent.innerHTML = `
+          <form id="profilePictureForm">
+            <div class="field">
+              <label>Profile Picture</label>
+              <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <div id="settingsProfilePreview" class="profile-preview">${escapeHtml((authenticatedAdmin?.username || 'A').charAt(0).toUpperCase())}</div>
+                <input id="profilePictureInput" type="file" accept="image/jpeg,image/png,image/webp" />
+              </div>
+            </div>
+            <div id="profilePictureAlert" class="alert"></div>
+            <button class="primary-btn" type="submit">Save Profile Picture</button>
+            <button id="removeProfilePicture" class="danger-btn" type="button">Remove Picture</button>
+          </form>
+          <div style="margin-top:24px;overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tbody>${Object.entries(settings || {}).map(([key, value]) => `<tr><th style="text-align:left;padding:10px;border-bottom:1px solid var(--border);">${escapeHtml(key.replaceAll('_', ' '))}</th><td style="padding:10px;border-bottom:1px solid var(--border);color:var(--muted);">${escapeHtml(value)}</td></tr>`).join('')}</tbody>
+            </table>
+          </div>`;
+        const preview = document.getElementById('settingsProfilePreview');
+        const input = document.getElementById('profilePictureInput');
+        const alert = document.getElementById('profilePictureAlert');
+        const currentPicture = authenticatedAdmin?.profile_picture;
+        if (currentPicture) {
+          preview.textContent = '';
+          preview.style.backgroundImage = `url("${escapeHtml(currentPicture)}")`;
+          preview.style.backgroundSize = 'cover';
+        }
+        input.addEventListener('change', () => {
+          const file = input.files[0];
+          if (file) preview.style.backgroundImage = `url("${URL.createObjectURL(file)}")`;
+          preview.textContent = file ? '' : (authenticatedAdmin?.username || 'A').charAt(0).toUpperCase();
+        });
+        document.getElementById('profilePictureForm').addEventListener('submit', async event => {
+          event.preventDefault();
+          if (!input.files[0]) {
+            showAlert(alert, 'Please choose a profile picture.', 'error');
+            return;
+          }
+          try {
+            const formData = new FormData();
+            formData.append('profile_picture', input.files[0]);
+            const result = await apiRequest('/api/admin/profile-picture', { method: 'POST', body: formData });
+            authenticatedAdmin.profile_picture = result.profile_picture;
+            enterDashboard(authenticatedAdmin);
+            showAlert(alert, 'Profile picture updated successfully.', 'success');
+          } catch (error) {
+            showAlert(alert, error.message, 'error');
+          }
+        });
+        document.getElementById('removeProfilePicture').addEventListener('click', async () => {
+          try {
+            await apiRequest('/api/admin/profile-picture', { method: 'DELETE' });
+            authenticatedAdmin.profile_picture = null;
+            enterDashboard(authenticatedAdmin);
+            renderSettings(settings);
+          } catch (error) {
+            showAlert(alert, error.message, 'error');
+          }
+        });
+      }
+
       async function showSection(sectionId, item) {
         navItems.forEach(navItem => navItem.classList.toggle('active', navItem === item));
         const isDashboard = sectionId === 'dashboard';
@@ -678,6 +760,16 @@
         if (sectionId === 'posts') {
           resourceSection.classList.remove('hidden');
           await showPostWorkspace();
+          return;
+        }
+
+        if (sectionId === 'settings') {
+          try {
+            const settings = await apiRequest('/api/admin/settings', { method: 'GET' });
+            renderSettings(settings);
+          } catch (error) {
+            showAlert(resourceAlert, error.message, 'error');
+          }
           return;
         }
 
