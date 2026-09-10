@@ -28,7 +28,7 @@
   document.body.appendChild(galleryOverlay);
   const viewerOverlay = document.createElement('div');
   viewerOverlay.className = 'posts-viewer-overlay';
-  viewerOverlay.innerHTML = '<button class="posts-viewer-close" type="button" aria-label="Close image viewer">&times;</button><img class="posts-viewer-image" alt="">';
+  viewerOverlay.innerHTML = '<button class="posts-viewer-close" type="button" aria-label="Close image viewer">&times;</button><button class="posts-viewer-prev" type="button" aria-label="Previous image">&#8249;</button><img class="posts-viewer-image" alt=""><button class="posts-viewer-next" type="button" aria-label="Next image">&#8250;</button><div class="posts-viewer-counter"></div>';
   document.body.appendChild(viewerOverlay);
   const style = document.createElement('style');
   style.textContent = `
@@ -44,15 +44,34 @@
     .posts-viewer-overlay { display: none; place-items: center; padding: 48px; }
     .posts-viewer-overlay.show { display: grid; }
     .posts-viewer-image { max-width: 92vw; max-height: 86vh; object-fit: contain; }
+    .posts-viewer-prev, .posts-viewer-next { position: fixed; top: 50%; transform: translateY(-50%); border: 0; background: rgba(255,255,255,.12); color: #fff; width: 44px; height: 64px; border-radius: 8px; font-size: 2.4rem; cursor: pointer; }
+    .posts-viewer-prev { left: 18px; }
+    .posts-viewer-next { right: 18px; }
+    .posts-viewer-counter { position: fixed; bottom: 18px; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; }
+    @media (max-width: 600px) { .published-post-gallery-item img { height: 125px; } .posts-viewer-prev, .posts-viewer-next { width: 36px; height: 52px; } }
   `;
   document.head.appendChild(style);
   const galleryGrid = galleryOverlay.querySelector('.posts-gallery-grid');
   const viewerImage = viewerOverlay.querySelector('.posts-viewer-image');
+  const viewerCounter = viewerOverlay.querySelector('.posts-viewer-counter');
+  let viewerImages = [];
+  let viewerIndex = 0;
 
   const closeGallery = () => galleryOverlay.classList.remove('show');
   const closeViewer = () => {
     viewerOverlay.classList.remove('show');
     viewerImage.removeAttribute('src');
+  };
+  const showViewerImage = () => {
+    if (!viewerImages.length) return;
+    viewerImage.src = resolveImageUrl(viewerImages[viewerIndex]);
+    viewerCounter.textContent = `${viewerIndex + 1} / ${viewerImages.length}`;
+  };
+  const openViewer = (images, index) => {
+    viewerImages = images;
+    viewerIndex = index;
+    showViewerImage();
+    viewerOverlay.classList.add('show');
   };
   const openGallery = images => {
     galleryGrid.replaceChildren();
@@ -63,6 +82,7 @@
       const imageElement = document.createElement('img');
       imageElement.src = resolveImageUrl(image);
       imageElement.alt = `Gallery image ${index + 1}`;
+      imageElement.loading = 'lazy';
       button.appendChild(imageElement);
       galleryGrid.appendChild(button);
     });
@@ -71,6 +91,14 @@
   };
   galleryOverlay.querySelector('.posts-gallery-close').addEventListener('click', closeGallery);
   viewerOverlay.querySelector('.posts-viewer-close').addEventListener('click', closeViewer);
+  viewerOverlay.querySelector('.posts-viewer-prev').addEventListener('click', () => {
+    viewerIndex = (viewerIndex - 1 + viewerImages.length) % viewerImages.length;
+    showViewerImage();
+  });
+  viewerOverlay.querySelector('.posts-viewer-next').addEventListener('click', () => {
+    viewerIndex = (viewerIndex + 1) % viewerImages.length;
+    showViewerImage();
+  });
   galleryOverlay.addEventListener('click', event => {
     if (event.target === galleryOverlay) closeGallery();
   });
@@ -81,8 +109,7 @@
     const button = event.target.closest('button');
     if (!button) return;
     const images = JSON.parse(galleryGrid.dataset.images || '[]');
-    viewerImage.src = resolveImageUrl(images[Number(button.dataset.imageIndex)]);
-    viewerOverlay.classList.add('show');
+    openViewer(images, Number(button.dataset.imageIndex));
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
@@ -124,7 +151,7 @@
         const imageElement = document.createElement('img');
         imageElement.src = resolveImageUrl(image);
         imageElement.alt = post.title || 'Published post image';
-        imageElement.loading = 'lazy';
+        imageElement.loading = 'eager';
         button.appendChild(imageElement);
         if (index === 2 && images.length > 3) {
           const more = document.createElement('span');

@@ -89,6 +89,10 @@
       .viewer-overlay { position: fixed; inset: 0; z-index: 60; display: none; place-items: center; background: rgba(0,0,0,.95); padding: 48px; }
       .viewer-overlay.show { display: grid; }
       .viewer-image { max-width: 92vw; max-height: 84vh; object-fit: contain; }
+      .viewer-prev, .viewer-next { position: fixed; top: 50%; transform: translateY(-50%); border: 0; background: rgba(255,255,255,.12); color: #fff; width: 44px; height: 64px; border-radius: 8px; font-size: 2.4rem; cursor: pointer; }
+      .viewer-prev { left: 18px; }
+      .viewer-next { right: 18px; }
+      .viewer-counter { position: fixed; bottom: 18px; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; }
       .viewer-close { position: fixed; top: 18px; right: 24px; border: 0; background: transparent; color: #fff; font-size: 2.2rem; cursor: pointer; }
       .upload-status { color: var(--muted); font-size: .85rem; min-height: 1.2em; }
       .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
@@ -277,7 +281,10 @@
     </div>
     <div id="adminViewerOverlay" class="viewer-overlay" aria-hidden="true">
       <button id="adminViewerClose" class="viewer-close" type="button" aria-label="Close image viewer">&times;</button>
+      <button id="adminViewerPrev" class="viewer-prev" type="button" aria-label="Previous image">&#8249;</button>
       <img id="adminViewerImage" class="viewer-image" alt="">
+      <button id="adminViewerNext" class="viewer-next" type="button" aria-label="Next image">&#8250;</button>
+      <div id="adminViewerCounter" class="viewer-counter"></div>
     </div>
 
     <script>
@@ -318,6 +325,9 @@
       const adminGalleryGrid = document.getElementById('adminGalleryGrid');
       const adminViewerOverlay = document.getElementById('adminViewerOverlay');
       const adminViewerImage = document.getElementById('adminViewerImage');
+      const adminViewerCounter = document.getElementById('adminViewerCounter');
+      let adminViewerImages = [];
+      let adminViewerIndex = 0;
       const pendingPanel = document.getElementById('pendingApprovalsPanel');
       const alertsPanel = document.getElementById('alertsPanel');
       const createUserPanel = document.getElementById('createUserPanel');
@@ -460,8 +470,16 @@
         adminGalleryOverlay.setAttribute('aria-hidden', 'true');
       }
 
-      function openAdminViewer(image) {
-        adminViewerImage.src = resolveImageUrl(image);
+      function showAdminViewerImage() {
+        if (!adminViewerImages.length) return;
+        adminViewerImage.src = resolveImageUrl(adminViewerImages[adminViewerIndex]);
+        adminViewerCounter.textContent = `${adminViewerIndex + 1} / ${adminViewerImages.length}`;
+      }
+
+      function openAdminViewer(images, index) {
+        adminViewerImages = images;
+        adminViewerIndex = index;
+        showAdminViewerImage();
         adminViewerOverlay.classList.add('show');
         adminViewerOverlay.setAttribute('aria-hidden', 'false');
       }
@@ -470,16 +488,25 @@
         adminViewerOverlay.classList.remove('show');
         adminViewerOverlay.setAttribute('aria-hidden', 'true');
         adminViewerImage.removeAttribute('src');
+        adminViewerCounter.textContent = '';
       }
 
       adminGalleryGrid.addEventListener('click', event => {
         const imageButton = event.target.closest('.admin-gallery-image');
         if (!imageButton) return;
         const images = JSON.parse(adminGalleryGrid.dataset.images || '[]');
-        openAdminViewer(images[Number(imageButton.dataset.imageIndex)]);
+        openAdminViewer(images, Number(imageButton.dataset.imageIndex));
       });
       document.getElementById('adminGalleryClose').addEventListener('click', closeAdminGallery);
       document.getElementById('adminViewerClose').addEventListener('click', closeAdminViewer);
+      document.getElementById('adminViewerPrev').addEventListener('click', () => {
+        adminViewerIndex = (adminViewerIndex - 1 + adminViewerImages.length) % adminViewerImages.length;
+        showAdminViewerImage();
+      });
+      document.getElementById('adminViewerNext').addEventListener('click', () => {
+        adminViewerIndex = (adminViewerIndex + 1) % adminViewerImages.length;
+        showAdminViewerImage();
+      });
       adminGalleryOverlay.addEventListener('click', event => {
         if (event.target === adminGalleryOverlay) closeAdminGallery();
       });
