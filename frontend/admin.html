@@ -393,6 +393,15 @@
           .replaceAll("'", '&#039;');
       }
 
+      function resolveImageUrl(image) {
+        if (!image) return '';
+        try {
+          return new URL(image, API_BASE).href;
+        } catch {
+          return image;
+        }
+      }
+
       async function loadPostSections() {
         const sections = await apiRequest('/api/post-sections');
         postSection.innerHTML = '<option value="">Select a section</option>' + sections.map(section => `<option value="${escapeHtml(section.value)}">${escapeHtml(section.label)}</option>`).join('');
@@ -423,8 +432,9 @@
         }
         recentPostsList.innerHTML = posts.map(post => {
           const image = (post.images || [])[0];
+          const imageUrl = resolveImageUrl(image);
           return `<div class="activity-item">
-            ${image ? `<img src="${escapeHtml(image)}" alt="" style="width:72px;height:54px;object-fit:cover;border-radius:8px;">` : ''}
+            ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" style="width:72px;height:54px;object-fit:cover;border-radius:8px;">` : ''}
             <div class="activity-meta">
               <div class="activity-name">${escapeHtml(post.title)}</div>
               <div class="activity-time">${escapeHtml((post.section || post.category || 'Unassigned').toUpperCase())} · ${escapeHtml(post.short_description || '')} · ${escapeHtml(post.created_at || '')} · ${escapeHtml(post.author || '')}</div>

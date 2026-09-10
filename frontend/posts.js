@@ -4,6 +4,13 @@
 
   const section = container.dataset.postSection;
   const escapeText = value => String(value ?? '');
+  const resolveImageUrl = image => {
+    try {
+      return new URL(image, window.location.origin).href;
+    } catch {
+      return image;
+    }
+  };
 
   function render(posts) {
     container.replaceChildren();
@@ -32,7 +39,7 @@
       gallery.className = 'published-post-gallery';
       (post.images || []).forEach(image => {
         const imageElement = document.createElement('img');
-        imageElement.src = image;
+        imageElement.src = resolveImageUrl(image);
         imageElement.alt = post.title || 'Published post image';
         imageElement.loading = 'lazy';
         gallery.appendChild(imageElement);

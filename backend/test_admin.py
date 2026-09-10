@@ -172,6 +172,19 @@ class AdminAuthTests(unittest.TestCase):
         self.assertEqual(sports_post.status_code, 201)
         sports_payload = sports_post.get_json()
         self.assertEqual(sports_payload['section'], 'sports')
+        valid_png = bytes.fromhex(
+            '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489'
+            '0000000d49444154789c6360606000000004000100fefb3d0000000049454e44ae426082'
+        )
+        image_post = self.client.post('/api/admin/posts', data={
+            'section': 'sports',
+            'title': f'Image Test {suffix}',
+            'description': 'Image description',
+            'photos': (io.BytesIO(valid_png), 'image-test.png'),
+        }, content_type='multipart/form-data')
+        self.assertEqual(image_post.status_code, 201)
+        image_url = image_post.get_json()['images'][0]
+        self.assertEqual(self.client.get(image_url).status_code, 200)
         achievement_post = self.client.post('/api/admin/posts', json={
             'section': 'achievements',
             'title': f'Achievement Test {suffix}',

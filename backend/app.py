@@ -153,7 +153,7 @@ def save_post_images(files):
             if destination.stat().st_size > 5 * 1024 * 1024:
                 destination.unlink(missing_ok=True)
                 raise ValueError('Each image must be 5 MB or smaller.')
-            saved.append(f'/images/uploads/{stored_name}')
+            saved.append(f'/api/uploads/{stored_name}' if IS_VERCEL else f'/images/uploads/{stored_name}')
     except OSError as error:
         for url in saved:
             (upload_dir / Path(url).name).unlink(missing_ok=True)
@@ -173,6 +173,11 @@ def serialize_post(row):
         post['images'] = []
     if not post['images'] and post.get('featured_image'):
         post['images'] = [post['featured_image']]
+    if IS_VERCEL:
+        post['images'] = [
+            f'/api/uploads/{Path(image).name}' if isinstance(image, str) and image.startswith('/images/uploads/') else image
+            for image in post['images']
+        ]
     return post
 
 
@@ -595,6 +600,11 @@ def admin_index():
 
 @app.route('/images/uploads/<path:filename>')
 def serve_uploaded_image(filename):
+    return send_from_directory(str(UPLOADS_DIR), filename)
+
+
+@app.route('/api/uploads/<path:filename>')
+def serve_api_uploaded_image(filename):
     return send_from_directory(str(UPLOADS_DIR), filename)
 
 
