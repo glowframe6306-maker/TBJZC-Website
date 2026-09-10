@@ -339,6 +339,7 @@ def ensure_default_data():
         CREATE TABLE IF NOT EXISTS login_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
+            username TEXT,
             email TEXT,
             user_type TEXT,
             profile_info TEXT,
@@ -415,6 +416,7 @@ def ensure_default_data():
 
     for table_name, column_name, column_definition in [
         ('login_requests', 'requested_role', 'TEXT'),
+        ('login_requests', 'username', 'TEXT'),
         ('login_requests', 'device_info', 'TEXT'),
         ('login_requests', 'admin_id', 'INTEGER'),
         ('activity_logs', 'actor_name', 'TEXT'),
@@ -685,14 +687,14 @@ def search():
 @app.route('/api/register', methods=['POST'])
 def register_user():
     payload = request.get_json(silent=True) or {}
-    name = (payload.get('name') or '').strip()
+    username = (payload.get('username') or '').strip()
     email = (payload.get('email') or '').strip().lower()
     role = (payload.get('role') or '').strip().upper()
     password = payload.get('password') or ''
     confirm_password = payload.get('confirm_password') or ''
 
-    if len(name) < 2 or len(name) > 120:
-        return jsonify(error='Name must be between 2 and 120 characters.'), 400
+    if not re.match(r'^[A-Za-z0-9_.-]{2,50}$', username):
+        return jsonify(error='Username must be 2-50 characters and use only letters, numbers, dots, underscores, or hyphens.'), 400
     if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
         return jsonify(error='A valid email address is required.'), 400
     if role not in ALLOWED_USER_ROLES:
@@ -707,15 +709,15 @@ def register_user():
             INSERT INTO admins (username, email, full_name, password_hash, role, status, created_at)
             VALUES (?, ?, ?, ?, ?, 'pending', ?)
             ''',
-            (email, email, name, generate_password_hash(password), role, iso_now()),
+            (username, email, username, generate_password_hash(password), role, iso_now()),
         )
         admin_id = cursor.lastrowid
         conn.execute(
             '''
-            INSERT INTO login_requests (name, email, user_type, profile_info, request_id, requested_role, device_info, admin_id, status, created_at)
+            INSERT INTO login_requests (username, email, user_type, profile_info, request_id, requested_role, device_info, admin_id, status, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
             ''',
-            (name, email, 'Admin', '', str(uuid.uuid4())[:8], role, request_device_info(), admin_id, iso_now()),
+            (username, email, 'Admin', '', str(uuid.uuid4())[:8], role, request_device_info(), admin_id, iso_now()),
         )
         conn.commit()
     except sqlite3.IntegrityError:
@@ -723,7 +725,7 @@ def register_user():
         conn.close()
         return jsonify(error='An account with that email already exists.'), 409
     conn.close()
-    record_activity('user_registration', target=f'admin:{admin_id}', details=f'New user registration requested for {email}.', actor_name=name, actor_email=email)
+    record_activity('user_registration', target=f'admin:{admin_id}', details=f'New user registration requested for {username}.', actor_name=username, actor_email=email)
     return jsonify(message='Registration submitted for Super Admin approval.', status='pending'), 202
 
 
@@ -800,16 +802,17 @@ def admin_login():
 
 @app.route('/api/admin/users', methods=['POST'])
 @require_admin
+@require_roles('SUPER_ADMIN')
 def create_admin_user():
-    actor = current_admin_record()
     payload = request.get_json(silent=True) or {}
-    name = (payload.get('name') or '').strip()
+    actor = current_admin_record()
+    username = (payload.get('username') or '').strip()
     email = (payload.get('email') or '').strip().lower()
     role = (payload.get('role') or '').strip().upper()
     password = payload.get('password') or ''
     confirm_password = payload.get('confirm_password') or ''
-    if len(name) < 2 or len(name) > 120:
-        return jsonify(error='Name must be between 2 and 120 characters.'), 400
+    if not re.match(r'^[A-Za-z0-9_.-]{2,50}$', username):
+        return jsonify(error='Username must be 2-50 characters and use only letters, numbers, dots, underscores, or hyphens.'), 400
     if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
         return jsonify(error='A valid email address is required.'), 400
     if role not in ALLOWED_USER_ROLES:
@@ -817,36 +820,21 @@ def create_admin_user():
     if len(password) < 8 or password != confirm_password:
         return jsonify(error='Passwords must match and be at least 8 characters.'), 400
 
-    is_super_admin = actor.get('role') == 'SUPER_ADMIN'
-    account_status = 'active' if is_super_admin else 'pending'
     conn = get_db()
     try:
         cursor = conn.execute(
             'INSERT INTO admins (username, email, full_name, password_hash, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (email, email, name, generate_password_hash(password), role, account_status, iso_now()),
+            (username, email, username, generate_password_hash(password), role, 'active', iso_now()),
         )
         user_id = cursor.lastrowid
-        if not is_super_admin:
-            conn.execute(
-                '''
-                INSERT INTO login_requests (name, email, user_type, profile_info, request_id, requested_role,
-                                            device_info, admin_id, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-                ''',
-                (name, email, 'Admin', '', str(uuid.uuid4())[:8], role, request_device_info(), user_id, iso_now()),
-            )
         conn.commit()
     except sqlite3.IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify(error='An account with that email already exists.'), 409
     conn.close()
-    if is_super_admin:
-        record_activity('user_created', target=f'admin:{user_id}', details=f'Created active {role} account for {email}.', admin_id=actor['id'])
-        return jsonify(message='User created successfully.', user_id=user_id, status='active'), 201
-
-    record_activity('pending_approval', target=f'admin:{user_id}', details=f'Requested {role} account for {email}.', admin_id=actor['id'])
-    return jsonify(message='User creation submitted for Super Admin approval.', user_id=user_id, status='pending'), 202
+    record_activity('user_created', target=f'admin:{user_id}', details=f'Created active {role} account for {username}.', admin_id=actor['id'])
+    return jsonify(message='User created successfully.', user_id=user_id, status='active'), 201
 
 
 @app.route('/api/admin/logout', methods=['POST'])
@@ -1141,7 +1129,7 @@ def pending_approvals():
     conn = get_db()
     rows = conn.execute(
         '''
-        SELECT lr.id, lr.name, lr.email, lr.requested_role, lr.device_info, lr.created_at,
+        SELECT lr.id, COALESCE(lr.username, lr.name) AS username, lr.email, lr.requested_role, lr.device_info, lr.created_at,
                lr.admin_id, a.status AS account_status
         FROM login_requests lr
         LEFT JOIN admins a ON a.id = lr.admin_id

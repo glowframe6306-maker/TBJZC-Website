@@ -64,7 +64,7 @@ class AdminAuthTests(unittest.TestCase):
         user_client = app.test_client()
 
         registration = user_client.post('/api/register', json={
-            'name': 'Pending User',
+            'username': f'pending_{suffix}',
             'email': pending_email,
             'role': 'ADMIN',
             'password': password,
@@ -72,7 +72,7 @@ class AdminAuthTests(unittest.TestCase):
         })
         self.assertEqual(registration.status_code, 202)
         self.assertEqual(user_client.post('/api/admin/login', json={
-            'username': pending_email,
+            'username': f'pending_{suffix}',
             'password': password,
         }).status_code, 403)
 
@@ -84,14 +84,14 @@ class AdminAuthTests(unittest.TestCase):
         request_id = next(item['id'] for item in pending if item['email'] == pending_email)
         self.assertEqual(super_client.post(f'/api/admin/login-requests/{request_id}/approve').status_code, 200)
         self.assertEqual(user_client.post('/api/admin/login', json={
-            'username': pending_email,
+            'username': f'pending_{suffix}',
             'password': password,
         }).status_code, 200)
         self.assertEqual(user_client.post('/api/admin/logout').status_code, 200)
 
         denied_client = app.test_client()
         self.assertEqual(denied_client.post('/api/register', json={
-            'name': 'Denied User',
+            'username': f'denied_{suffix}',
             'email': denied_email,
             'role': 'DEVELOPER',
             'password': password,
@@ -101,12 +101,12 @@ class AdminAuthTests(unittest.TestCase):
         denied_id = next(item['id'] for item in denied if item['email'] == denied_email)
         self.assertEqual(super_client.post(f'/api/admin/login-requests/{denied_id}/deny').status_code, 200)
         self.assertEqual(denied_client.post('/api/admin/login', json={
-            'username': denied_email,
+            'username': f'denied_{suffix}',
             'password': password,
         }).status_code, 403)
 
         direct = super_client.post('/api/admin/users', json={
-            'name': 'Direct User',
+            'username': f'direct_{suffix}',
             'email': direct_email,
             'role': 'MAIN ADMIN',
             'password': password,
@@ -115,9 +115,18 @@ class AdminAuthTests(unittest.TestCase):
         self.assertEqual(direct.status_code, 201)
         direct_client = app.test_client()
         self.assertEqual(direct_client.post('/api/admin/login', json={
-            'username': direct_email,
+            'username': f'direct_{suffix}',
             'password': password,
         }).status_code, 200)
+        unauthorized_create = direct_client.post('/api/admin/users', json={
+            'username': f'blocked_{suffix}',
+            'email': f'blocked_{suffix}@example.com',
+            'role': 'ADMIN',
+            'password': password,
+            'confirm_password': password,
+        })
+        self.assertEqual(unauthorized_create.status_code, 403)
+        self.assertIsNone(next((item for item in super_client.get('/api/admin/users').get_json() if item['username'] == f'blocked_{suffix}'), None))
         self.assertEqual(direct_client.post(f'/api/admin/login-requests/{denied_id}/approve').status_code, 403)
         self.assertEqual(super_client.get('/api/admin/alerts').status_code, 200)
         activities = super_client.get('/api/admin/recent-activity').get_json()
