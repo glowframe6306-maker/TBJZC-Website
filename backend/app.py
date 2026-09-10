@@ -9,6 +9,7 @@ from functools import wraps
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory, session
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -151,17 +152,10 @@ def save_post_images(files):
             destination = upload_dir / stored_name
             uploaded.save(destination)
             if destination.stat().st_size > 4 * 1024 * 1024:
-                destination.unlink(missing_ok=True)
                 raise ValueError('Each image must be 4 MB or smaller.')
             saved.append(f'/api/uploads/{stored_name}' if IS_VERCEL else f'/images/uploads/{stored_name}')
     except OSError as error:
-        for url in saved:
-            (upload_dir / Path(url).name).unlink(missing_ok=True)
         raise ValueError(f'Unable to store uploaded images: {error}') from error
-    except Exception:
-        for url in saved:
-            (upload_dir / Path(url).name).unlink(missing_ok=True)
-        raise
     return saved
 
 
@@ -561,6 +555,8 @@ except Exception:
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(error):
+    if isinstance(error, HTTPException):
+        return error
     logger.exception('Unhandled application exception: %s', error)
     if request.path.startswith('/api/'):
         return jsonify(error='A server error occurred. Please try again later.'), 500
@@ -956,18 +952,27 @@ def manage_posts():
     author_id = admin['id'] if admin else None
     author = admin['username'] if admin else 'Administrator'
     conn = get_db()
-    cursor = conn.execute(
-        '''
-        INSERT INTO posts (title, short_description, content, category, section, author_id, author, status, featured_image, images, tags, publish_date, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''',
-        (title, description, description, section, section, author_id, author, payload.get('status') or 'published', images[0] if images else '', json.dumps(images), '', now, now, now),
-    )
-    conn.commit()
-    post_id = cursor.lastrowid
-    conn.close()
+    try:
+        cursor = conn.execute(
+            '''
+            INSERT INTO posts (title, short_description, content, category, section, author_id, author, status, featured_image, images, tags, publish_date, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (title, description, description, section, section, author_id, author, payload.get('status') or 'published', images[0] if images else '', json.dumps(images), '', now, now, now),
+        )
+        post_id = cursor.lastrowid
+        conn.commit()
+        saved_post = conn.execute('SELECT * FROM posts WHERE id = ?', (post_id,)).fetchone()
+    except sqlite3.Error as error:
+        conn.rollback()
+        return jsonify(error=f'Unable to save post: {error}'), 500
+    finally:
+        conn.close()
+    if not saved_post:
+        return jsonify(error='Post was not saved.'), 500
     log_activity('create_post', target=f'post:{post_id}', details=f'Created post in {section}: {title}', admin_id=session['admin_id'])
-    return jsonify(message='Post published successfully.', id=post_id, section=section, images=images), 201
+    saved_payload = serialize_post(saved_post)
+    return jsonify(message='Post published successfully.', id=post_id, section=section, images=saved_payload['images'], post=saved_payload), 201
 
 
 @app.route('/api/admin/post-images', methods=['POST'])
@@ -985,6 +990,28 @@ def upload_post_image():
     return jsonify(image=images[0]), 201
 
 
+def delete_unshared_post_images(image_urls, deleted_post_id):
+    if not image_urls:
+        return
+    conn = get_db()
+    remaining_rows = conn.execute('SELECT id, images, featured_image FROM posts WHERE id != ?', (deleted_post_id,)).fetchall()
+    conn.close()
+    remaining_images = set()
+    for row in remaining_rows:
+        try:
+            remaining_images.update(json.loads(row['images'] or '[]'))
+        except (TypeError, json.JSONDecodeError):
+            pass
+        if row['featured_image']:
+            remaining_images.add(row['featured_image'])
+    for image_url in image_urls:
+        if image_url in remaining_images:
+            continue
+        if not isinstance(image_url, str) or not image_url.startswith(('/images/uploads/', '/api/uploads/')):
+            continue
+        (UPLOADS_DIR / Path(image_url).name).unlink(missing_ok=True)
+
+
 @app.route('/api/admin/posts/<int:post_id>', methods=['PUT', 'DELETE'])
 @require_admin
 def edit_or_delete_post(post_id):
@@ -994,9 +1021,21 @@ def edit_or_delete_post(post_id):
         conn.close()
         return jsonify(error='Post not found.'), 404
     if request.method == 'DELETE':
-        conn.execute('DELETE FROM posts WHERE id = ?', (post_id,))
-        conn.commit()
-        conn.close()
+        try:
+            cursor = conn.execute('DELETE FROM posts WHERE id = ?', (post_id,))
+            if cursor.rowcount != 1:
+                conn.rollback()
+                return jsonify(error='Post was not deleted.'), 500
+            conn.commit()
+        except sqlite3.Error as error:
+            conn.rollback()
+            return jsonify(error=f'Unable to delete post: {error}'), 500
+        finally:
+            conn.close()
+        try:
+            delete_unshared_post_images(json.loads(post['images'] or '[]'), post_id)
+        except (TypeError, json.JSONDecodeError):
+            delete_unshared_post_images([], post_id)
         log_activity('delete_post', target=f'post:{post_id}', details=f'Deleted post: {post["title"]}', admin_id=session['admin_id'])
         return jsonify(message='Post deleted successfully.')
 

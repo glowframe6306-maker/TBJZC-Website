@@ -212,6 +212,55 @@ class AdminAuthTests(unittest.TestCase):
         self.assertEqual(stored_sports['section'], 'sports')
         self.assertEqual(stored_sports['author'], 'admin')
 
+    def test_post_create_delete_survives_refresh_and_relogin(self):
+        login = self.client.post('/api/admin/login', json={
+            'username': 'admin',
+            'password': 'admin123',
+        })
+        self.assertEqual(login.status_code, 200)
+        suffix = uuid.uuid4().hex[:8]
+        valid_png = bytes.fromhex(
+            '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489'
+            '0000000d49444154789c6360606000000004000100fefb3d0000000049454e44ae426082'
+        )
+        post_a = self.client.post('/api/admin/posts', data={
+            'section': 'sports',
+            'title': f'Permanent A {suffix}',
+            'description': 'Post A',
+            'photos': (io.BytesIO(valid_png), 'post-a.png'),
+        }, content_type='multipart/form-data')
+        post_b = self.client.post('/api/admin/posts', json={
+            'section': 'sports',
+            'title': f'Permanent B {suffix}',
+            'description': 'Post B',
+        })
+        self.assertEqual(post_a.status_code, 201)
+        self.assertEqual(post_b.status_code, 201)
+        post_a_id = post_a.get_json()['id']
+        post_b_id = post_b.get_json()['id']
+        post_a_image = post_a.get_json()['images'][0]
+        self.assertEqual(self.client.get(post_a_image).status_code, 200)
+
+        refreshed = {post['id'] for post in self.client.get('/api/admin/posts').get_json()}
+        self.assertIn(post_a_id, refreshed)
+        self.assertIn(post_b_id, refreshed)
+
+        deleted = self.client.delete(f'/api/admin/posts/{post_a_id}')
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(self.client.get(post_a_image).status_code, 404)
+        after_delete = {post['id'] for post in self.client.get('/api/admin/posts').get_json()}
+        self.assertNotIn(post_a_id, after_delete)
+        self.assertIn(post_b_id, after_delete)
+
+        self.assertEqual(self.client.post('/api/admin/logout').status_code, 200)
+        self.assertEqual(self.client.post('/api/admin/login', json={
+            'username': 'admin',
+            'password': 'admin123',
+        }).status_code, 200)
+        after_relogin = {post['id'] for post in self.client.get('/api/admin/posts').get_json()}
+        self.assertNotIn(post_a_id, after_relogin)
+        self.assertIn(post_b_id, after_relogin)
+
 
 if __name__ == '__main__':
     unittest.main()
