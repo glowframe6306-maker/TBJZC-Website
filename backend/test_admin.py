@@ -170,6 +170,8 @@ class AdminAuthTests(unittest.TestCase):
             'description': 'Sports description',
         })
         self.assertEqual(sports_post.status_code, 201)
+        sports_payload = sports_post.get_json()
+        self.assertEqual(sports_payload['section'], 'sports')
         achievement_post = self.client.post('/api/admin/posts', json={
             'section': 'achievements',
             'title': f'Achievement Test {suffix}',
@@ -191,6 +193,11 @@ class AdminAuthTests(unittest.TestCase):
         self.assertNotIn(f'Sports Test {suffix}', achievement_titles)
         self.assertIn(f'Achievement Test {suffix}', achievement_titles)
         self.assertNotIn(f'Achievement Test {suffix}', sports_titles)
+
+        stored = self.client.get('/api/admin/posts').get_json()
+        stored_sports = next(post for post in stored if post['id'] == sports_payload['id'])
+        self.assertEqual(stored_sports['section'], 'sports')
+        self.assertEqual(stored_sports['author'], 'Super Administrator')
 
 
 if __name__ == '__main__':

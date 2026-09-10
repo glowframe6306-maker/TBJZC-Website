@@ -44,6 +44,7 @@ else:
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / 'tbjzc_cms.db'
+UPLOADS_DIR = DATA_DIR / 'uploads' if IS_VERCEL else IMAGES_DIR / 'uploads'
 
 app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path='')
 secret_key = os.environ.get('FLASK_SECRET_KEY')
@@ -135,7 +136,7 @@ def request_device_info():
 
 def save_post_images(files):
     allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-    upload_dir = IMAGES_DIR / 'uploads'
+    upload_dir = UPLOADS_DIR
     upload_dir.mkdir(parents=True, exist_ok=True)
     saved = []
     try:
@@ -153,6 +154,10 @@ def save_post_images(files):
                 destination.unlink(missing_ok=True)
                 raise ValueError('Each image must be 5 MB or smaller.')
             saved.append(f'/images/uploads/{stored_name}')
+    except OSError as error:
+        for url in saved:
+            (upload_dir / Path(url).name).unlink(missing_ok=True)
+        raise ValueError(f'Unable to store uploaded images: {error}') from error
     except Exception:
         for url in saved:
             (upload_dir / Path(url).name).unlink(missing_ok=True)
@@ -588,6 +593,11 @@ def admin_index():
     return send_from_directory(str(FRONTEND_DIR), 'admin.html')
 
 
+@app.route('/images/uploads/<path:filename>')
+def serve_uploaded_image(filename):
+    return send_from_directory(str(UPLOADS_DIR), filename)
+
+
 @app.route('/images/<path:filename>')
 def serve_image(filename):
     return send_from_directory(str(IMAGES_DIR), filename)
@@ -920,6 +930,8 @@ def manage_posts():
                 return jsonify(error='Post images must be stored image paths.'), 400
     except ValueError as error:
         return jsonify(error=str(error)), 400
+    except OSError as error:
+        return jsonify(error=f'Unable to store uploaded images: {error}'), 503
 
     now = iso_now()
     author = session.get('admin', {}).get('full_name', 'Administrator')
@@ -1025,7 +1037,7 @@ def manage_media():
         if uploaded.filename == '':
             return jsonify(error='Please choose a file to upload.'), 400
         filename = secure_filename(uploaded.filename)
-        upload_dir = IMAGES_DIR / 'uploads'
+        upload_dir = UPLOADS_DIR
         upload_dir.mkdir(parents=True, exist_ok=True)
         destination = upload_dir / filename
         uploaded.save(destination)
